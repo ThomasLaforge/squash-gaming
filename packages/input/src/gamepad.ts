@@ -1,5 +1,5 @@
 import type { PlayerInput as SimPlayerInput, ShotIntent } from '@squash-gaming/simulation';
-import { DEFAULT_GAMEPAD_MAPPING, applyDeadZone, type DeviceMapping } from './mapping';
+import { DEFAULT_GAMEPAD_MAPPING, applyDeadZone, type GamepadMapping } from './mapping';
 import { InputState, type InputStateOptions, toPlayerInput } from './state';
 import type { GameAction, InputFrame } from './types';
 
@@ -12,7 +12,7 @@ export interface GamepadLike {
 }
 
 export interface GamepadAdapterOptions extends InputStateOptions {
-  mapping?: DeviceMapping;
+  mapping?: GamepadMapping;
   /** Source des manettes ; défaut : `navigator.getGamepads` si disponible. */
   getGamepads?: () => (GamepadLike | null)[];
   deadZone?: number;
@@ -28,7 +28,7 @@ export interface GamepadAdapterOptions extends InputStateOptions {
 export class GamepadAdapter {
   public readonly state: InputState;
 
-  private readonly mapping: DeviceMapping;
+  private readonly mapping: GamepadMapping;
   private readonly getGamepads: () => (GamepadLike | null)[];
   private readonly onAction?: (action: GameAction) => void;
   private readonly deadZone: number;
@@ -57,8 +57,14 @@ export class GamepadAdapter {
       this.applyAxes();
       return this.state.sample();
     }
-    const movement = applyDeadZone(pad.axes[0] ?? 0, pad.axes[1] ?? 0, this.deadZone);
-    const aim = applyDeadZone(pad.axes[2] ?? 0, pad.axes[3] ?? 0, this.deadZone);
+    const movementAxes = this.mapping.axes.movement;
+    const aimAxes = this.mapping.axes.aim;
+    const movement = applyDeadZone(
+      pad.axes[movementAxes.x] ?? 0,
+      pad.axes[movementAxes.y] ?? 0,
+      this.deadZone
+    );
+    const aim = applyDeadZone(pad.axes[aimAxes.x] ?? 0, pad.axes[aimAxes.y] ?? 0, this.deadZone);
     this.prevSticks = { movement, aim };
     this.updateButtons(pad);
     this.applyAxes();
@@ -75,15 +81,10 @@ export class GamepadAdapter {
     return this.state.takeShotIntent();
   }
 
-  /** Effort courant [0, 1]. */
-  public getEffort(): number {
-    return this.state.getEffort();
-  }
-
   /** Échantillon `PlayerInput` complet (mouvement, visée, effort, focus). */
   public samplePlayerInput(): SimPlayerInput {
     const frame = this.poll();
-    return toPlayerInput(frame, this.state.getEffort());
+    return toPlayerInput(frame);
   }
 
   public reset(): void {

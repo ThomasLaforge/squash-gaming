@@ -1,5 +1,7 @@
 import { PlayerInput, SimulationState, GameEvent, RenderSnapshot } from './types';
 
+const TRIVIAL_MOVEMENT_SPEED = 5;
+
 export class Simulation {
   private state: SimulationState;
   private readonly dt: number;
@@ -56,10 +58,9 @@ export class Simulation {
     this.state.tick += 1;
     this.state.time += this.dt;
 
-    const speed = 5;
-    const inputEffort = input.effort ?? 1;
-    this.state.velocity.x = input.movement.x * speed * inputEffort;
-    this.state.velocity.y = input.movement.y * speed * inputEffort;
+    // M0 ne donne encore aucun effet de gameplay à effort, focus ou shot.
+    this.state.velocity.x = input.movement.x * TRIVIAL_MOVEMENT_SPEED;
+    this.state.velocity.y = input.movement.y * TRIVIAL_MOVEMENT_SPEED;
 
     this.state.position.x += this.state.velocity.x * this.dt;
     this.state.position.y += this.state.velocity.y * this.dt;

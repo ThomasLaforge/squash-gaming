@@ -2,6 +2,8 @@
 
 Date : 2026-08-21 · Environnement : macOS (darwin), Node v24.16.0, pnpm 11.13.1
 
+Statut : **À VALIDER** — validation locale verte, premier passage CI et validation humaine requis.
+
 ## Résultat utilisateur
 
 Le dépôt s'installe, se lance et se valide avec des commandes uniques et
@@ -13,8 +15,8 @@ documentées, avant toute mécanique de jeu.
 - `pnpm validate` exécute lint, typecheck, tests unitaires, tests Playwright et
   build de production, dans cet ordre.
 - La simulation triviale du M0 (pas fixe 120 Hz) avance en direct dans l'app,
-  pilotée par l'adaptateur clavier (ou la croix directionnelle d'une manette).
-- CI GitHub Actions exécutant exactement `pnpm validate`.
+  pilotée par l'adaptateur clavier (ou le stick gauche d'une manette).
+- Workflow GitHub Actions prêt à exécuter exactement `pnpm validate`.
 
 Aucune règle de squash n'est implémentée : court, balle, joueur, raquette, score,
 stamina, focus avancé et direction artistique restent exclus (périmètre M0).
@@ -25,11 +27,11 @@ stamina, focus avancé et direction artistique restent exclus (périmètre M0).
 | --- | --- | --- |
 | AC01 — Installation propre, une seule procédure documentée | PASS AUTOMATIQUE | `README.md · Démarrage` ; `pnpm install` (postinstall Playwright, `allowBuilds : esbuild`) |
 | AC02 — `pnpm dev` ouvre une application minimale sans erreur | PASS AUTOMATIQUE | Test Playwright `s'ouvre sans erreur et affiche le statut bootstrap` (HTTP 200, aucun `pageerror`/`console.error`) |
-| AC03 — `pnpm validate` exécute réellement toutes les validations installées | PASS AUTOMATIQUE | `package.json · scripts.validate` = lint + typecheck + test + test:e2e + build ; commande unique exécutée en CI |
-| AC04 — La simulation s'exécute sous Vitest sans DOM | PASS AUTOMATIQUE | `packages/simulation` (environment node) : 5 tests dont simulation pas fixe ; `apps/game` boucle headless 3 tests sans DOM |
+| AC03 — `pnpm validate` exécute réellement toutes les validations installées | PASS AUTOMATIQUE | `package.json · scripts.validate` = lint + typecheck + test + test:e2e + build ; commande unique exécutée localement |
+| AC04 — La simulation s'exécute sous Vitest sans DOM | PASS AUTOMATIQUE | `packages/simulation` (environment node) : 5 tests dont simulation pas fixe ; `apps/game` boucle headless 6 tests sans DOM |
 | AC05 — Un test échoue si la simulation importe React, Three.js ou une API DOM | PASS AUTOMATIQUE | `packages/simulation/tests/architecture.test.ts` (fitness : imports interdits + globals DOM interdits) |
-| AC06 — Le build de production passe en CI | PASS AUTOMATIQUE | `.github/workflows/validate.yml` exécute `pnpm validate` (inclut `pnpm run build`) ; build local ✓ en < 1 s |
-| AC07 — Les mappings clavier et manette produisent un contrat sémantique commun | PASS AUTOMATIQUE | `packages/input` : 21 tests, dont « Contrat sémantique commun clavier/manette » (mêmes échantillons et mêmes `ShotIntent` pour les deux adaptateurs) |
+| AC06 — Le build de production passe en CI | À PROUVER | `.github/workflows/validate.yml` est configuré ; attendre le premier run distant vert et référencer son URL |
+| AC07 — Les mappings clavier et manette produisent un contrat sémantique commun | PASS AUTOMATIQUE | `packages/input` : 22 tests, dont remapping réel des axes et contrat commun clavier/manette |
 
 ## Validation automatisée
 
@@ -37,9 +39,9 @@ stamina, focus avancé et direction artistique restent exclus (périmètre M0).
 - Résultat : exit 0.
   - lint : 0 erreur, 0 avertissement.
   - typecheck : `simulation`, `input`, `game` — OK.
-  - tests unitaires : simulation 5/5, input 21/21, game 3/3 (**29 tests**).
+  - tests unitaires : simulation 5/5, input 22/22, game 6/6 (**33 tests**).
   - tests Playwright : 5/5.
-  - build de production : `apps/game` ✓ (120 kB JS, 64 kB gzip).
+  - build de production : `apps/game` ✓ (203,09 kB JS, 63,97 kB gzip).
 - Environnement : macOS (darwin), Node v24.16.0, pnpm 11.13.1, Chromium Playwright.
 
 `pnpm install --frozen-lockfile` : OK (le lockfile est cohérent pour la CI).
@@ -49,10 +51,10 @@ stamina, focus avancé et direction artistique restent exclus (périmètre M0).
 - Ajoutés : aucun scénario versionné au sens `Scenario` (le M0 n'a pas de
   mécanique de simulation à scénariser ; la balle arrive au M1).
 - Tests déterministes équivalents ajoutés :
-  - paquets `input` (21) : mappings, dead zone, adaptateurs clavier/manette,
+  - paquet `input` (22) : mappings, dead zone, adaptateurs clavier/manette,
     contrat commun.
-  - paquet `game` (3) : pas fixe déterministe, alimentation clavier, intentions
-    de frappe équivalentes clavier/manette.
+  - paquet `game` (6) : pas fixe identique sous rendus 30/60/120 Hz, retard
+    borné, alimentation clavier et intentions équivalentes clavier/manette.
 - Modifiés : le contrat `ShotIntent` existant en `types.ts` (simulation) a été
   typé (remplace `string | null`) pour porter les intentions de frappe —
   exigence d'AC07 (contrat sémantique commun).
@@ -60,9 +62,9 @@ stamina, focus avancé et direction artistique restent exclus (périmètre M0).
 
 ## Mesures
 
-- Build de production : ~485 ms, 120 kB JS / 64 kB gzip.
-- Tests unitaires : < 1 s au total (simulation 5 ms, input 7 ms, game 3 ms).
-- Playwright : ~3,8 s pour 5 parcours (webServer Vite démarré automatiquement).
+- Build de production : ~478 ms, 203,09 kB JS / 63,97 kB gzip.
+- Tests unitaires : 33 tests, tous verts.
+- Playwright : ~4,9 s pour 5 parcours (webServer Vite démarré automatiquement).
 - Baseline de performance de simulation headless : non mesurée — elle relève du
   M1 (budget de performance, cf. `VALIDATION.md`).
 
@@ -83,7 +85,12 @@ stamina, focus avancé et direction artistique restent exclus (périmètre M0).
   commande de récursivité passe (pas de test supprimé, aucun test affaibli).
 - Le pas fixe est borné (retard max 250 ms) dans la boucle de rendu de l'app
   pour respecter « la gestion d'un retard accumulé doit être explicite et
-  bornée » (ADR 0002). Le rendu n'influence pas l'état simulé.
+  bornée » (ADR 0002). Un accumulateur isolé prouve le même résultat sous
+  rendus simulés à 30, 60 et 120 Hz.
+- Les mappings clavier et manette sont séparés : les indices d'axes manette
+  sont effectivement remappables et couverts par un test dédié.
+- L'effort et le focus existent uniquement dans le contrat d'entrée ; M0 ne
+  leur attribue aucun effet de gameplay.
 
 ## Limites connues
 
@@ -93,7 +100,7 @@ stamina, focus avancé et direction artistique restent exclus (périmètre M0).
   arrive avec le M1 pour le laboratoire de physique).
 - La détection de manette dans l'app (`navigator.getGamepads`) n'est pas
   couverte par Playwright (aucune manette en CI) ; elle est couverte en
-  headless via `GamepadAdapter` injectable (21 tests `input`).
+  headless via `GamepadAdapter` injectable (22 tests `input`).
 - Aucun scénario versionné type `Scenario` ne fait encore appel à la balle —
   il sera introduit au M1.
 

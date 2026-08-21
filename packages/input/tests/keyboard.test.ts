@@ -123,7 +123,7 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     const adapter = new KeyboardAdapter({
       simulationHz: SIM_HZ,
       mapping: {
-        sticks: { movement: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' } },
+        movement: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
         shots: { Enter: 'length' },
         effort: {},
         focus: 'ArrowDown'

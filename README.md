@@ -18,7 +18,7 @@ Une seule procédure, sur une installation fraîche.
 
 ### Prérequis
 
-- Node.js ≥ 24 (version figée en `package.json · engines`).
+- Node.js 24.16.0 (figé dans `.node-version` et `package.json · engines`).
 - pnpm 11.13.1 (`corepack` le gère : `corepack enable`, ou `corepack use pnpm@11.13.1`).
 
 ### Installer
@@ -41,7 +41,7 @@ pnpm dev
 Ouvre l'application minimale sur [http://localhost:5173](http://localhost:5173).
 La simulation triviale du M0 (pas fixe 120 Hz) y avance en direct ;
 l'adaptateur clavier permet de déplacer le personnage trivial avec
-`W` / `A` / `S` / `D` (ou la croix directionnelle d'une manette).
+`W` / `A` / `S` / `D` (ou le stick gauche d'une manette).
 
 ### Valider (commande unique)
 
@@ -98,6 +98,6 @@ milestone actif prévaut pour son périmètre.
 ## État actuel
 
 - Constitution documentaire : prête.
-- Bootstrap applicatif (M0) : terminé — workspace, simulation headless,
-  adaptateurs d'entrée, application minimale, validation unique et CI.
-- Milestone actif : [M1 — Laboratoire de physique](docs/milestones/001-laboratoire-physique.md).
+- Bootstrap applicatif (M0) : validation locale verte ; validation humaine et
+  premier passage CI encore requis.
+- Milestone actif : [M0 — Bootstrap technique](docs/milestones/000-bootstrap-technique.md).

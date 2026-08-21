@@ -3,6 +3,7 @@ import { GamepadAdapter, KeyboardAdapter } from '@squash-gaming/input';
 import { Simulation, type PlayerInput } from '@squash-gaming/simulation';
 
 import { STATUS, type StatusKey } from './status';
+import { FixedStepAccumulator } from './fixed-step';
 
 const SIMULATION_HZ = 120;
 
@@ -15,10 +16,9 @@ function createFixedStepLoop(
   hz: number,
   onStep: () => void
 ): { start: () => void; stop: () => void; step: () => void } {
-  const dtMs = 1000 / hz;
+  const fixedStep = new FixedStepAccumulator(hz);
   let rafId: number | undefined;
   let lastTime: number | undefined;
-  let accumulator = 0;
   let running = false;
 
   const frame = (time: number) => {
@@ -26,12 +26,7 @@ function createFixedStepLoop(
     if (lastTime === undefined) lastTime = time;
     let elapsed = time - lastTime;
     lastTime = time;
-    if (elapsed > 250) elapsed = 250;
-    accumulator += elapsed;
-    while (accumulator >= dtMs) {
-      accumulator -= dtMs;
-      onStep();
-    }
+    fixedStep.advance(elapsed, onStep);
     rafId = requestAnimationFrame(frame);
   };
 
@@ -40,7 +35,7 @@ function createFixedStepLoop(
       if (running) return;
       running = true;
       lastTime = undefined;
-      accumulator = 0;
+      fixedStep.reset();
       rafId = requestAnimationFrame(frame);
     },
     stop() {
@@ -48,7 +43,7 @@ function createFixedStepLoop(
       if (rafId !== undefined) cancelAnimationFrame(rafId);
       rafId = undefined;
       lastTime = undefined;
-      accumulator = 0;
+      fixedStep.reset();
     },
     step() {
       onStep();
@@ -94,10 +89,11 @@ export default function App() {
 
   useEffect(() => {
     const simulation = new Simulation(undefined, SIMULATION_HZ);
-    const keyboard = new KeyboardAdapter({ simulationHz: SIMULATION_HZ });
+    const now = () => performance.now() / 1000;
+    const keyboard = new KeyboardAdapter({ simulationHz: SIMULATION_HZ, now });
     const gamepad = new GamepadAdapter({
       simulationHz: SIMULATION_HZ,
-      now: () => performance.now() / 1000
+      now
     });
     simRef.current = simulation;
     keyboardRef.current = keyboard;
@@ -177,7 +173,7 @@ export default function App() {
           x = {position.x.toFixed(3)} · y = {position.y.toFixed(3)}
         </p>
         <p style={{ margin: '0 0 0.75rem', opacity: 0.6, fontSize: '0.85rem' }}>
-          Déplacement : <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> — ou croix directionnelle
+          Déplacement : <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> — ou stick gauche
           (manette). Pas fixe {SIMULATION_HZ} Hz, indépendant du framerate.
         </p>
         <div style={{ display: 'flex', gap: '0.5rem' }}>

@@ -12,13 +12,12 @@ export {
   DEFAULT_KEYBOARD_MAPPING,
   DEFAULT_GAMEPAD_MAPPING,
   applyDeadZone,
-  directionVector,
-  type DeviceMapping
+  type KeyboardMapping,
+  type GamepadMapping
 } from './mapping';
 export type {
   GameAction,
   InputFrame,
-  ShotAction,
-  StickDirection
+  ShotAction
 } from './types';
 export { EMPTY_INPUT_FRAME } from './types';

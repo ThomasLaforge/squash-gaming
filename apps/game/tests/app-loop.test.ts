@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { KeyboardAdapter, GamepadAdapter, type GamepadLike } from '@squash-gaming/input';
 import { Simulation } from '@squash-gaming/simulation';
+import { FixedStepAccumulator } from '../src/fixed-step';
 
 const SIM_HZ = 120;
 
@@ -26,9 +27,31 @@ function makeKeyTarget() {
  * quelle que soit la façon dont on avance le temps.
  */
 describe('App — boucle simulation headless', () => {
-  it('avance la simulation à pas fixe de façon déterministe', () => {
-    const simA = new Simulation(undefined, SIM_HZ);
-    const simB = new Simulation(undefined, SIM_HZ);
+  it.each([30, 60, 120])(
+    'produit le même état après une seconde rendue à %i Hz',
+    (renderHz) => {
+      const simulation = new Simulation(undefined, SIM_HZ);
+      const accumulator = new FixedStepAccumulator(SIM_HZ);
+      const zeroInput = {
+        movement: { x: 0, y: 0 },
+        aim: { x: 0, y: 0 },
+        shot: null,
+        effort: 0.5,
+        focus: false
+      };
+
+      for (let frame = 0; frame < renderHz; frame += 1) {
+        accumulator.advance(1000 / renderHz, () => simulation.tick(zeroInput));
+      }
+
+      expect(simulation.getState().tick).toBe(120);
+      expect(simulation.getState().time).toBeCloseTo(1, 6);
+    }
+  );
+
+  it('borne explicitement un retard de rendu important', () => {
+    const simulation = new Simulation(undefined, SIM_HZ);
+    const accumulator = new FixedStepAccumulator(SIM_HZ, 250);
     const zeroInput = {
       movement: { x: 0, y: 0 },
       aim: { x: 0, y: 0 },
@@ -36,13 +59,10 @@ describe('App — boucle simulation headless', () => {
       effort: 0.5,
       focus: false
     };
-    for (let i = 0; i < 120; i += 1) {
-      simA.tick(zeroInput);
-      simB.tick(zeroInput);
-    }
-    expect(simA.getState().tick).toBe(120);
-    expect(simA.getState()).toEqual(simB.getState());
-    expect(simA.getState().time).toBeCloseTo(1, 6);
+    accumulator.advance(1000, () => simulation.tick(zeroInput));
+
+    expect(simulation.getState().tick).toBe(30);
+    expect(simulation.getState().time).toBeCloseTo(0.25, 6);
   });
 
   it('l’adaptateur clavier alimente la simulation sans DOM', () => {
@@ -67,7 +87,7 @@ describe('App — boucle simulation headless', () => {
       axes: [0, 0, 0, 0],
       buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }))
     };
-    pad.buttons[10] = { pressed: true, value: 1 };
+    pad.buttons[0] = { pressed: true, value: 1 };
     const gamepad = new GamepadAdapter({
       simulationHz: SIM_HZ,
       now: () => 0,

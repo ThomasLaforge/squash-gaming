@@ -53,7 +53,11 @@ describe("Fitness d'Architecture — Simulation headless", () => {
         }
 
         forbiddenImports.forEach((forbidden) => {
-          const importRegex = new RegExp(`from\\s+['"]${forbidden}['"]|import\\s+['"]${forbidden}['"]`, 'i');
+          const escaped = forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const importRegex = new RegExp(
+            `(?:from\\s+|import\\s+|import\\s*\\(|require\\s*\\()\\s*['"]${escaped}(?:/[^'"]*)?['"]`,
+            'i'
+          );
           if (importRegex.test(line)) {
             throw new Error(
               `Violation d'architecture dans ${path.relative(srcDir, file)}:L${index + 1}. Import de "${forbidden}" interdit dans packages/simulation.`

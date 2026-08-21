@@ -1,10 +1,10 @@
 import type { PlayerInput as SimPlayerInput, ShotIntent } from '@squash-gaming/simulation';
-import { DEFAULT_KEYBOARD_MAPPING, type DeviceMapping } from './mapping';
+import { DEFAULT_KEYBOARD_MAPPING, type KeyboardMapping } from './mapping';
 import { InputState, type InputStateOptions, toPlayerInput } from './state';
 import type { GameAction, InputFrame } from './types';
 
 export interface KeyboardAdapterOptions extends InputStateOptions {
-  mapping?: DeviceMapping;
+  mapping?: KeyboardMapping;
   /** Reçoit les événements sémantiques émis (telemétrie, tests, UI). */
   onAction?: (action: GameAction) => void;
 }
@@ -22,7 +22,7 @@ interface KeyTargetLike {
 export class KeyboardAdapter {
   public readonly state: InputState;
 
-  private readonly mapping: DeviceMapping;
+  private readonly mapping: KeyboardMapping;
   private readonly onAction?: (action: GameAction) => void;
   private readonly pressedCodes = new Set<string>();
   private readonly handleKeyDown: (event: { code: string }) => void;
@@ -53,7 +53,7 @@ export class KeyboardAdapter {
    * tick courant (edges et delta d'effort sont consommés).
    */
   public sample(): InputFrame {
-    const keys = this.mapping.sticks.movement;
+    const keys = this.mapping.movement;
     if (keys) {
       let x = 0;
       let y = 0;
@@ -71,15 +71,10 @@ export class KeyboardAdapter {
     return this.state.takeShotIntent();
   }
 
-  /** Effort courant [0, 1]. */
-  public getEffort(): number {
-    return this.state.getEffort();
-  }
-
   /** Échantillon `PlayerInput` complet (mouvement, effort, focus) pour la simulation. */
   public samplePlayerInput(): SimPlayerInput {
     const frame = this.sample();
-    return toPlayerInput(frame, this.state.getEffort());
+    return toPlayerInput(frame);
   }
 
   public reset(): void {

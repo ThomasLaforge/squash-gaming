@@ -28,7 +28,7 @@ describe('Simulation Headless', () => {
     expect(state.time).toBeCloseTo(1 / 120, 5);
   });
 
-  it('devrait appliquer le mouvement en fonction de l\'input de déplacement et de l\'effort', () => {
+  it('devrait appliquer uniquement le mouvement trivial au M0', () => {
     const sim = new Simulation({ position: { x: 10, y: 20 } }, 100); // 100Hz = dt is 0.01s
     const input: PlayerInput = {
       ...zeroInput,
@@ -36,17 +36,13 @@ describe('Simulation Headless', () => {
       effort: 0.8
     };
 
-    // Speed is 5. movement is 1, -1. effort is 0.8.
-    // velocity should be x = 1 * 5 * 0.8 = 4, y = -1 * 5 * 0.8 = -4
-    // delta position should be velocity * dt = 4 * 0.01 = 0.04, -4 * 0.01 = -0.04
-    // New position: x = 10.04, y = 19.96
     sim.tick(input);
 
     const state = sim.getState();
-    expect(state.velocity.x).toBeCloseTo(4, 5);
-    expect(state.velocity.y).toBeCloseTo(-4, 5);
-    expect(state.position.x).toBeCloseTo(10.04, 5);
-    expect(state.position.y).toBeCloseTo(19.96, 5);
+    expect(state.velocity.x).toBeCloseTo(5, 5);
+    expect(state.velocity.y).toBeCloseTo(-5, 5);
+    expect(state.position.x).toBeCloseTo(10.05, 5);
+    expect(state.position.y).toBeCloseTo(19.95, 5);
   });
 
   it('devrait émettre un événement TICK pour chaque tick', () => {

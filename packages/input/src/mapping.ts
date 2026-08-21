@@ -1,53 +1,47 @@
-import type { ShotAction, StickDirection } from './types';
+import type { ShotAction } from './types';
 
 /**
  * Mapping périphérique → actions sémantiques.
  * Les codes bruts (KeyboardEvent.code, indices de boutons manette) restent
  * du côté de l'adaptateur ; le gameplay ne les connaît pas (ADR 0004).
  */
-export interface DeviceMapping {
-  sticks: {
-    movement?: { up: string; down: string; left: string; right: string };
-    aim?: { up: string; down: string; left: string; right: string };
-  };
+interface ActionMapping {
   shots: Partial<Record<string, ShotAction>>;
   /** +1 monte l'effort, -1 le descend. */
   effort: Partial<Record<string, 1 | -1>>;
   focus: string | null;
 }
 
+export interface KeyboardMapping extends ActionMapping {
+  movement?: { up: string; down: string; left: string; right: string };
+  aim?: { up: string; down: string; left: string; right: string };
+}
+
+export interface GamepadMapping extends ActionMapping {
+  axes: {
+    movement: { x: number; y: number };
+    aim: { x: number; y: number };
+  };
+}
+
 /** Clavier WQSD/EUSA : WASD, Espace = length, Maj = drop, E = lob, Q = push, F = focus. */
-export const DEFAULT_KEYBOARD_MAPPING: DeviceMapping = {
-  sticks: { movement: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' } },
+export const DEFAULT_KEYBOARD_MAPPING: KeyboardMapping = {
+  movement: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' },
   shots: { Space: 'length', ShiftLeft: 'drop', KeyE: 'lob', KeyQ: 'push' },
   effort: {},
   focus: 'KeyF'
 };
 
-/** Manette standard : croix directionnelle pour le déplacement, stick droit pour la visée. */
-export const DEFAULT_GAMEPAD_MAPPING: DeviceMapping = {
-  sticks: {
-    movement: { up: 'standard:1', down: 'standard:2', left: 'standard:3', right: 'standard:4' },
-    aim: { up: 'standard:5', down: 'standard:6', left: 'standard:7', right: 'standard:8' }
+/** Manette standard : stick gauche pour le déplacement, stick droit pour la visée. */
+export const DEFAULT_GAMEPAD_MAPPING: GamepadMapping = {
+  axes: {
+    movement: { x: 0, y: 1 },
+    aim: { x: 2, y: 3 }
   },
-  shots: { 'standard:10': 'length', 'standard:11': 'drop', 'standard:12': 'lob', 'standard:13': 'push' },
-  effort: { 'standard:6': 1 },
-  focus: 'standard:9'
+  shots: { 'standard:0': 'length', 'standard:1': 'drop', 'standard:2': 'lob', 'standard:3': 'push' },
+  effort: { 'standard:6': -1, 'standard:7': 1 },
+  focus: 'standard:4'
 };
-
-/** Convertit une direction de stick en vectoriel unitaire (axe Y : haut négatif). */
-export function directionVector(direction: StickDirection): { x: number; y: number } {
-  switch (direction) {
-    case 'up':
-      return { x: 0, y: -1 };
-    case 'down':
-      return { x: 0, y: 1 };
-    case 'left':
-      return { x: -1, y: 0 };
-    case 'right':
-      return { x: 1, y: 0 };
-  }
-}
 
 /**
  * Applique une dead zone radiale non normalisée : l'amplitude de sortie

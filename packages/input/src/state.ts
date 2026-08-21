@@ -5,18 +5,13 @@ import { EMPTY_INPUT_FRAME } from './types';
 export interface InputStateOptions {
   /** Fréquence de la simulation : sert à convertir les temps en tick. */
   simulationHz: number;
-  /**
-   * Vitesse de variation de l'effort quand une gâchette est maintenue,
-   * en unités d'effort par seconde. L'effort est borné à [0, 1].
-   */
-  effortSpeed?: number;
-  /** Horloge injectée (déterminisme) ; défaut : horloge de performance si disponible. */
+  /** Horloge injectée (déterminisme) ; défaut neutre à zéro. */
   now?: () => number;
 }
 
 /**
  * Réagregate les événements sémantiques (`GameAction`) en un échantillon
- * par tick de simulation et tient l'état des actions (effort, focus, coup en cours).
+ * par tick de simulation et tient l'état minimal (axes, focus, coup en cours).
  *
  * Les sources (clavier, manette, replay, IA) décident seules quelles
  * `GameAction` émettre ; cet état ne connaît aucun code de périphérique (ADR 0004).
@@ -29,15 +24,11 @@ export class InputState {
   private focus = false;
 
   private activeShot: { type: ShotAction; pressedAtTick: number } | null = null;
-  private effort = 0.5;
-
   private readonly simHz: number;
-  private readonly effortSpeed: number;
   private readonly now: () => number;
 
   constructor(options: InputStateOptions) {
     this.simHz = options.simulationHz;
-    this.effortSpeed = options.effortSpeed ?? 1;
     this.now = options.now ?? (() => 0);
   }
 
@@ -61,7 +52,7 @@ export class InputState {
         this.activeShot = null;
         break;
       case 'effort':
-        this.effortDelta += action.value * this.effortSpeed;
+        this.effortDelta += action.value;
         break;
       case 'focus':
         this.focus = action.pressed;
@@ -72,11 +63,9 @@ export class InputState {
   /**
    * Produit l'échantillon sémantique du tick courant et consomme les edges
    * et le delta d'effort. À appeler une fois par `Simulation.tick`.
-   * L'effort interne est mis à jour avant l'échantillon : la trame porte
-   * l'effort effectif du tick, pas celui du tick précédent.
+   * M0 expose seulement la demande d'effort ; son effet sera défini plus tard.
    */
   public sample(): InputFrame {
-    this.effort = clamp01(this.effort + this.effortDelta / this.simHz);
     const frame: InputFrame = {
       movement: { ...this.movement },
       aim: { ...this.aim },
@@ -101,10 +90,6 @@ export class InputState {
     return { type, requestedAtTick: pressedAtTick, releasedAtTick: null };
   }
 
-  public getEffort(): number {
-    return this.effort;
-  }
-
   public getFocus(): boolean {
     return this.focus;
   }
@@ -116,27 +101,22 @@ export class InputState {
     this.effortDelta = 0;
     this.focus = false;
     this.activeShot = null;
-    this.effort = 0.5;
   }
 }
 
 /**
  * Construit le `PlayerInput` de la simulation à partir de l'échantillon
- * sémantique. L'effort et l'intention de frappe sont portés à part,
- * la simulation reçoit les deux au même tick.
+ * sémantique. Au M0, effort reste neutre et aucune frappe n'est exécutée ;
+ * les demandes correspondantes restent observables dans `InputFrame`.
  */
-export function toPlayerInput(frame: InputFrame, effort: number): PlayerInput {
+export function toPlayerInput(frame: InputFrame): PlayerInput {
   return {
     movement: { ...frame.movement },
     aim: { ...frame.aim },
     shot: null,
-    effort,
+    effort: 0.5,
     focus: frame.focus
   };
-}
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
 }
 
 export { EMPTY_INPUT_FRAME };

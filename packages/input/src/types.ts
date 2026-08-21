@@ -3,9 +3,6 @@
  * Les événements bruts (touches, boutons, axes) ne traversent jamais cette frontière.
  */
 
-/** Direction logique d'un stick, indépendante du code de touche ou du bouton. */
-export type StickDirection = 'up' | 'down' | 'left' | 'right';
-
 /** Types de coups sémantiques (leurs mécaniques arrivent au M3). */
 export type ShotAction = 'length' | 'drop' | 'lob' | 'push';
 
@@ -17,7 +14,7 @@ export type GameAction =
   | { kind: 'press-shot'; shot: ShotAction }
   /** Relâchement d'un coup (edge de descente). */
   | { kind: 'release-shot' }
-  /** Vitesse de variation de l'effort demandée par une gâchette. */
+  /** Direction de variation de l'effort demandée par une gâchette. */
   | { kind: 'effort'; value: number }
   /** Appui ou relâchement du focus. */
   | { kind: 'focus'; pressed: boolean };

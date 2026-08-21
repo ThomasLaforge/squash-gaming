@@ -74,7 +74,7 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
       onAction: (a) => actions.push(a)
     });
 
-    holder.pad = withButton(makePad({ axes: [0, -1, 0, 0] }), 10, true);
+    holder.pad = withButton(makePad({ axes: [0, -1, 0, 0] }), 0, true);
     adapter.poll();
 
     expect(actions.length).toBeGreaterThan(0);
@@ -95,47 +95,69 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
     expect(frame.aim).toEqual({ x: 1 - DEADZONE, y: 0 });
   });
 
+  it('un mapping custom remappe réellement les axes de mouvement et de visée', () => {
+    const holder: { pad: GamepadLike | null } = {
+      pad: makePad({ axes: [0.8, 0, 0, 0, -1, 0] })
+    };
+    const adapter = new GamepadAdapter({
+      simulationHz: SIM_HZ,
+      getGamepads: () => [holder.pad],
+      mapping: {
+        axes: {
+          movement: { x: 4, y: 5 },
+          aim: { x: 1, y: 0 }
+        },
+        shots: {},
+        effort: {},
+        focus: null
+      }
+    });
+
+    const frame = adapter.poll();
+    expect(frame.movement.x).toBeCloseTo(-(1 - DEADZONE), 6);
+    expect(frame.movement.y).toBe(0);
+    expect(frame.aim.x).toBe(0);
+    expect(frame.aim.y).toBeCloseTo(0.8 - DEADZONE, 6);
+  });
+
   it('les quatre boutons de coup émettent les press-shots corrects', () => {
     const holder: { pad: GamepadLike | null } = { pad: makePad() };
     const adapter = new GamepadAdapter({ simulationHz: SIM_HZ, getGamepads: () => [holder.pad] });
 
-    holder.pad = withButton(makePad(), 10, true);
+    holder.pad = withButton(makePad(), 0, true);
     expect(adapter.poll().shotEdges).toEqual(['length']);
     expect(adapter.consumeShotIntent()?.type).toBe('length');
 
-    holder.pad = withButton(makePad(), 11, true);
+    holder.pad = withButton(makePad(), 1, true);
     expect(adapter.poll().shotEdges).toEqual(['drop']);
     expect(adapter.consumeShotIntent()?.type).toBe('drop');
 
-    holder.pad = withButton(makePad(), 12, true);
+    holder.pad = withButton(makePad(), 2, true);
     expect(adapter.poll().shotEdges).toEqual(['lob']);
     expect(adapter.consumeShotIntent()?.type).toBe('lob');
 
-    holder.pad = withButton(makePad(), 13, true);
+    holder.pad = withButton(makePad(), 3, true);
     expect(adapter.poll().shotEdges).toEqual(['push']);
     expect(adapter.consumeShotIntent()?.type).toBe('push');
   });
 
-  it('la gâchette standard:6 fait monter l’effort de 1 par seconde, qui se stabilise au relâchement', () => {
+  it('la gâchette standard:7 expose une demande d’effort sans mécanique anticipée', () => {
     const holder: { pad: GamepadLike | null } = { pad: makePad() };
     const adapter = new GamepadAdapter({
       simulationHz: SIM_HZ,
       getGamepads: () => [holder.pad]
     });
 
-    holder.pad = withButton(makePad(), 6, true);
-    adapter.poll();
-    expect(adapter.getEffort()).toBeCloseTo(0.5 + 1 / 120, 9);
+    holder.pad = withButton(makePad(), 7, true);
+    expect(adapter.poll().effortDelta).toBe(1);
 
-    adapter.poll();
-    expect(adapter.getEffort()).toBeCloseTo(0.5 + 2 / 120, 9);
+    expect(adapter.poll().effortDelta).toBe(1);
 
     holder.pad = makePad();
-    adapter.poll();
-    expect(adapter.getEffort()).toBeCloseTo(0.5 + 2 / 120, 9);
+    expect(adapter.poll().effortDelta).toBe(0);
   });
 
-  it('standard:9 (focus) émet un focus maintenu jusqu’au relâchement', () => {
+  it('standard:4 (focus) émet un focus maintenu jusqu’au relâchement', () => {
     const actions: GameAction[] = [];
     const holder: { pad: GamepadLike | null } = { pad: makePad() };
     const adapter = new GamepadAdapter({
@@ -144,7 +166,7 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
       onAction: (a) => actions.push(a)
     });
 
-    holder.pad = withButton(makePad(), 9, true);
+    holder.pad = withButton(makePad(), 4, true);
     expect(adapter.poll().focus).toBe(true);
     expect(adapter.poll().focus).toBe(true);
 
@@ -158,7 +180,7 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
 
   it('sans manette connectée, la trame reste vide et les pressés sont relâchés', () => {
     const actions: GameAction[] = [];
-    const holder: { pad: GamepadLike | null } = { pad: withButton(makePad(), 10, true) };
+    const holder: { pad: GamepadLike | null } = { pad: withButton(makePad(), 0, true) };
     const adapter = new GamepadAdapter({
       simulationHz: SIM_HZ,
       getGamepads: () => [holder.pad],
@@ -199,7 +221,7 @@ describe('Contrat sémantique commun clavier/manette (AC07)', () => {
     expect(kFrame.effortDelta).toBe(gFrame.effortDelta);
   });
 
-  it('frappe : Space au clavier ≡ bouton 10 à la manette → mêmes ShotIntent', () => {
+  it('frappe : Space au clavier ≡ bouton 0 à la manette → mêmes ShotIntent', () => {
     const target = makeKeyboardTarget();
     let clock = 0.25;
     const keyboard = new KeyboardAdapter({ simulationHz: SIM_HZ, now: () => clock });
@@ -208,7 +230,7 @@ describe('Contrat sémantique commun clavier/manette (AC07)', () => {
     keyboard.sample();
     const kIntent = keyboard.consumeShotIntent();
 
-    const holder: { pad: GamepadLike | null } = { pad: withButton(makePad(), 10, true) };
+    const holder: { pad: GamepadLike | null } = { pad: withButton(makePad(), 0, true) };
     const gamepad = new GamepadAdapter({
       simulationHz: SIM_HZ,
       now: () => clock,
@@ -225,13 +247,13 @@ describe('Contrat sémantique commun clavier/manette (AC07)', () => {
     expect(kIntent?.requestedAtTick).toBe(30); // 0.25 s × 120 Hz
   });
 
-  it('focus : F au clavier ≡ bouton 9 à la manette → même focus', () => {
+  it('focus : F au clavier ≡ bouton 4 à la manette → même focus', () => {
     const target = makeKeyboardTarget();
     const keyboard = new KeyboardAdapter({ simulationHz: SIM_HZ, now: () => 0 });
     keyboard.attach(target);
     target.press('KeyF');
 
-    const holder: { pad: GamepadLike | null } = { pad: withButton(makePad(), 9, true) };
+    const holder: { pad: GamepadLike | null } = { pad: withButton(makePad(), 4, true) };
     const gamepad = new GamepadAdapter({
       simulationHz: SIM_HZ,
       now: () => 0,
