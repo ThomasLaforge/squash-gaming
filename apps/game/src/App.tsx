@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { GamepadAdapter, KeyboardAdapter } from '@squash-gaming/input';
-import { Simulation, type PlayerInput } from '@squash-gaming/simulation';
+import { Simulation, type GameEvent, type Vec3 } from '@squash-gaming/simulation';
 
 import { STATUS, type StatusKey } from './status';
 import { FixedStepAccumulator } from './fixed-step';
 
 const SIMULATION_HZ = 120;
+const INITIAL_POSITION: Vec3 = { x: 3, y: 0, z: 1 };
 
-/**
- * Puits de temps à pas fixe : la simulation avance à la cadence de simulation,
- * quel que soit le framerate de rendu (ADR 0002). Un retard est borné à 250 ms
- * pour éviter la spirale de la mort.
- */
 function createFixedStepLoop(
   hz: number,
   onStep: () => void
@@ -24,7 +19,7 @@ function createFixedStepLoop(
   const frame = (time: number) => {
     if (!running) return;
     if (lastTime === undefined) lastTime = time;
-    let elapsed = time - lastTime;
+    const elapsed = time - lastTime;
     lastTime = time;
     fixedStep.advance(elapsed, onStep);
     rafId = requestAnimationFrame(frame);
@@ -51,72 +46,79 @@ function createFixedStepLoop(
   };
 }
 
-function isPadConnected(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    typeof navigator.getGamepads === 'function' &&
-    Array.from(navigator.getGamepads()).some((pad) => !!pad && pad.connected)
-  );
+function formatVector(position: Vec3): string {
+  return `x = ${position.x.toFixed(3)} · y = ${position.y.toFixed(3)} · z = ${position.z.toFixed(3)}`;
 }
 
 export default function App() {
   const [tick, setTick] = useState(0);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState(INITIAL_POSITION);
+  const [speed, setSpeed] = useState(0);
+  const [lastEvent, setLastEvent] = useState<GameEvent['type'] | '—'>('—');
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
-
   const simRef = useRef<Simulation | null>(null);
-  const keyboardRef = useRef<KeyboardAdapter | null>(null);
-  const gamepadRef = useRef<GamepadAdapter | null>(null);
+  const loopRef = useRef<{ stop: () => void } | null>(null);
+
+  const refresh = (simulation: Simulation) => {
+    const snapshot = simulation.getRenderSnapshot();
+    setTick(snapshot.tick);
+    setPosition(snapshot.position);
+    setSpeed(snapshot.speed);
+  };
 
   const onStep = () => {
     const simulation = simRef.current;
-    const keyboard = keyboardRef.current;
-    const gamepad = gamepadRef.current;
-    if (!simulation || !keyboard || !gamepad) return;
-    if (pausedRef.current) return;
-
-    // La manette prime quand elle est connectée ; sinon le clavier.
-    const input: PlayerInput = isPadConnected() ? gamepad.samplePlayerInput() : keyboard.samplePlayerInput();
-    simulation.tick(input);
-    const state = simulation.getState();
-    setTick(state.tick);
-    setPosition(state.position);
+    if (!simulation || pausedRef.current) return;
+    simulation.step();
+    refresh(simulation);
   };
   const onStepRef = useRef(onStep);
   onStepRef.current = onStep;
 
   useEffect(() => {
-    const simulation = new Simulation(undefined, SIMULATION_HZ);
-    const now = () => performance.now() / 1000;
-    const keyboard = new KeyboardAdapter({ simulationHz: SIMULATION_HZ, now });
-    const gamepad = new GamepadAdapter({
-      simulationHz: SIMULATION_HZ,
-      now
+    let disposed = false;
+    let simulation: Simulation | null = null;
+
+    void Simulation.create({ position: INITIAL_POSITION }).then((created) => {
+      if (disposed) {
+        created.dispose();
+        return;
+      }
+      simulation = created;
+      simRef.current = created;
+      created.onEvent((event) => {
+        if (event.type !== 'TICK') setLastEvent(event.type);
+      });
+      refresh(created);
+      const loop = createFixedStepLoop(SIMULATION_HZ, () => onStepRef.current());
+      loopRef.current = loop;
+      loop.start();
     });
-    simRef.current = simulation;
-    keyboardRef.current = keyboard;
-    gamepadRef.current = gamepad;
-
-    keyboard.attach(window as unknown as Parameters<KeyboardAdapter['attach']>[0]);
-
-    const loop = createFixedStepLoop(SIMULATION_HZ, () => onStepRef.current());
-    loop.start();
 
     return () => {
-      loop.stop();
-      keyboard.detach(window as unknown as Parameters<KeyboardAdapter['attach']>[0]);
+      disposed = true;
+      loopRef.current?.stop();
+      loopRef.current = null;
+      simRef.current = null;
+      simulation?.dispose();
     };
   }, []);
 
   const reset = () => {
-    const simulation = new Simulation(undefined, SIMULATION_HZ);
-    simRef.current = simulation;
-    keyboardRef.current?.reset();
-    gamepadRef.current?.reset();
-    setTick(0);
-    setPosition({ x: 0, y: 0 });
+    const simulation = simRef.current;
+    if (!simulation) return;
+    simulation.reset(INITIAL_POSITION);
+    setLastEvent('—');
+    refresh(simulation);
+  };
+
+  const stepOnce = () => {
+    const simulation = simRef.current;
+    if (!simulation) return;
+    simulation.step();
+    refresh(simulation);
   };
 
   const statusLines = (Object.entries(STATUS) as [StatusKey, boolean][]).map(
@@ -135,16 +137,16 @@ export default function App() {
       data-testid="app"
     >
       <h1 style={{ fontSize: '1.5rem', margin: '0 0 0.5rem', fontWeight: 700 }}>
-        Squash Gaming — Bootstrap
+        Squash Gaming — Laboratoire M1
       </h1>
       <p style={{ margin: 0, opacity: 0.7 }}>
-        M0 : workspace pnpm, simulation headless, entrées clavier/manette, validation unique.
+        Balle Rapier headless, court Z-up, pas fixe {SIMULATION_HZ} Hz.
       </p>
 
       <section
         style={{ marginTop: '1.5rem', display: 'grid', gap: '0.5rem', maxWidth: 480 }}
         data-testid="status"
-        aria-label="Statut des briques bootstrap"
+        aria-label="Statut des briques du projet"
       >
         {statusLines.map(([key, label]) => (
           <div
@@ -164,33 +166,20 @@ export default function App() {
         ))}
       </section>
 
-      <section style={{ marginTop: '1.5rem' }}>
-        <h2 style={{ fontSize: '1rem', marginTop: 0 }}>Simulation triviale (M0)</h2>
-        <p style={{ margin: '0 0 0.5rem', opacity: 0.8, fontVariantNumeric: 'tabular-nums' }} data-testid="tick">
-          tick = {tick}
-        </p>
-        <p style={{ margin: '0 0 0.5rem', opacity: 0.8, fontVariantNumeric: 'tabular-nums' }} data-testid="position">
-          x = {position.x.toFixed(3)} · y = {position.y.toFixed(3)}
-        </p>
-        <p style={{ margin: '0 0 0.75rem', opacity: 0.6, fontSize: '0.85rem' }}>
-          Déplacement : <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> — ou stick gauche
-          (manette). Pas fixe {SIMULATION_HZ} Hz, indépendant du framerate.
-        </p>
+      <section style={{ marginTop: '1.5rem', maxWidth: 560 }} aria-label="État de la balle">
+        <h2 style={{ fontSize: '1rem', marginTop: 0 }}>État de la simulation</h2>
+        <p data-testid="tick">tick = {tick}</p>
+        <p data-testid="position">{formatVector(position)}</p>
+        <p data-testid="speed">vitesse = {speed.toFixed(3)} m/s</p>
+        <p data-testid="last-event">dernier événement = {lastEvent}</p>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            type="button"
-            onClick={() => setPaused((p) => !p)}
-            style={{ padding: '0.4rem 1rem', cursor: 'pointer' }}
-            data-testid="pause-toggle"
-          >
+          <button type="button" onClick={() => setPaused((value) => !value)} data-testid="pause-toggle">
             {paused ? 'Reprendre' : 'Pause'}
           </button>
-          <button
-            type="button"
-            onClick={reset}
-            style={{ padding: '0.4rem 1rem', cursor: 'pointer' }}
-            data-testid="reset"
-          >
+          <button type="button" onClick={stepOnce} data-testid="step-once">
+            Pas suivant
+          </button>
+          <button type="button" onClick={reset} data-testid="reset">
             Reset
           </button>
         </div>

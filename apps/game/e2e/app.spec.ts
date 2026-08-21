@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('App minimale', () => {
-  test('s’ouvre sans erreur et affiche le statut bootstrap', async ({ page }) => {
+test.describe('Laboratoire physique M1', () => {
+  test('s’ouvre sans erreur et affiche le statut du projet', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
@@ -10,89 +10,50 @@ test.describe('App minimale', () => {
 
     await page.goto('/');
 
-    await expect(page.getByRole('heading', { name: /squash gaming/i })).toBeVisible();
-    const status = page.getByTestId('status');
-    await expect(status).toBeVisible();
-    // Toutes les briques installées au M0 doivent être signalées OK.
-    const lines = await status.locator('div').allTextContents();
-    expect(lines.some((line) => line.includes('installed'))).toBe(true);
-    expect(lines.some((line) => line.includes('simulationHeadless'))).toBe(true);
-
+    await expect(page.getByRole('heading', { name: /laboratoire m1/i })).toBeVisible();
+    await expect(page.getByTestId('status')).toBeVisible();
     await expect(errors).toEqual([]);
   });
 
-  test('le tick de simulation avance au chargement (pas fixe)', async ({ page }) => {
+  test('la balle évolue au pas fixe et rencontre le sol', async ({ page }) => {
     await page.goto('/');
-    // Le compteur tick doit progresser dès que l'app tourne.
     await expect
-      .poll(async () => {
-        const text = (await page.getByTestId('tick').textContent()) ?? '';
-        const match = /tick = (\d+)/.exec(text);
-        return match ? Number(match[1]) : 0;
-      })
-      .toBeGreaterThan(0);
+      .poll(async () => (await readTick(page)) > 0)
+      .toBe(true);
+
+    await expect
+      .poll(async () => readPosition(await page.getByTestId('position').textContent()).z < 0.9)
+      .toBe(true);
+
+    await expect
+      .poll(async () => /IMPACT|SECOND_REBOND/.test((await page.getByTestId('last-event').textContent()) ?? ''))
+      .toBe(true);
   });
 
-  test('WASD fait avancer le personnage trivial', async ({ page }) => {
+  test('Pause fige le tick et Reprendre le relance', async ({ page }) => {
     await page.goto('/');
-    // Attend que la simulation soit en marche.
-    await expect
-      .poll(async () => {
-        const text = (await page.getByTestId('tick').textContent()) ?? '';
-        const match = /tick = (\d+)/.exec(text);
-        return match ? Number(match[1]) : 0;
-      })
-      .toBeGreaterThan(0);
-
-    const before = readPosition(await page.getByTestId('position').textContent());
-    await page.keyboard.press('KeyD');
-    await page.keyboard.down('KeyD');
-    await page.waitForTimeout(500);
-    await page.keyboard.up('KeyD');
-    const after = readPosition(await page.getByTestId('position').textContent());
-    // Mouvement positif en X (droite) : la position change.
-    expect(after.x).toBeGreaterThan(before.x);
-  });
-
-  test('Pause fige le tick, Reprendre le relance', async ({ page }) => {
-    await page.goto('/');
-    await expect
-      .poll(async () => {
-        const text = (await page.getByTestId('tick').textContent()) ?? '';
-        const match = /tick = (\d+)/.exec(text);
-        return match ? Number(match[1]) : 0;
-      })
-      .toBeGreaterThan(0);
+    await expect.poll(async () => (await readTick(page)) > 0).toBe(true);
 
     await page.getByTestId('pause-toggle').click();
     const frozen = await readTick(page);
-    await page.waitForTimeout(400);
-    const afterPause = await readTick(page);
-    expect(afterPause).toBe(frozen);
+    await page.waitForTimeout(300);
+    expect(await readTick(page)).toBe(frozen);
 
     await page.getByTestId('pause-toggle').click();
-    await expect
-      .poll(async () => (await readTick(page)) > afterPause)
-      .toBe(true);
+    await expect.poll(async () => (await readTick(page)) > frozen).toBe(true);
   });
 
-  test('Reset remet la position à zéro', async ({ page }) => {
+  test('Reset restaure exactement la position initiale', async ({ page }) => {
     await page.goto('/');
-    // D’abord, déplacer le personnage pour qu’il parte de 0.
-    await page.keyboard.down('KeyD');
-    await page.waitForTimeout(500);
-    await page.keyboard.up('KeyD');
-    const moved = readPosition(await page.getByTestId('position').textContent());
-    expect(moved.x).toBeGreaterThan(0);
-
-    // Reset : la position revient exactement à 0.
+    await expect.poll(async () => (await readTick(page)) > 0).toBe(true);
+    await page.getByTestId('pause-toggle').click();
     await page.getByTestId('reset').click();
-    await expect
-      .poll(async () => {
-        const pos = readPosition(await page.getByTestId('position').textContent());
-        return Math.abs(pos.x) < 0.001 && Math.abs(pos.y) < 0.001;
-      })
-      .toBe(true);
+
+    await expect.poll(async () => readPosition(await page.getByTestId('position').textContent())).toEqual({
+      x: 3,
+      y: 0,
+      z: 1
+    });
   });
 });
 
@@ -102,7 +63,9 @@ async function readTick(page: import('@playwright/test').Page): Promise<number> 
   return match ? Number(match[1]) : 0;
 }
 
-function readPosition(text: string | null | undefined): { x: number; y: number } {
-  const match = /x = ([-\d.]+) · y = ([-\d.]+)/.exec(text ?? '');
-  return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: NaN, y: NaN };
+function readPosition(text: string | null | undefined): { x: number; y: number; z: number } {
+  const match = /x = ([-\d.]+) · y = ([-\d.]+) · z = ([-\d.]+)/.exec(text ?? '');
+  return match
+    ? { x: Number(match[1]), y: Number(match[2]), z: Number(match[3]) }
+    : { x: NaN, y: NaN, z: NaN };
 }

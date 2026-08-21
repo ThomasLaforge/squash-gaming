@@ -8,16 +8,27 @@
         "baseURL": "http://127.0.0.1:9000/v1"
       },
       "models": {
-        "Qwen/Qwen3.8-27B": {
-          "name": "Qwen 3.8 27B — Spark",
+        "Ornith-1.5-35B-A3B": {
+          "name": "Ornith 1.5 35B A3B — GX10",
           "limit": {
-            "context": 262144,
-            "output": 8192
+            "context": 131072,
+            "output": 4096
+          },
+          "compatibility": {
+            "reasoningField": "reasoning_content"
+          },
+          "body": {
+            "reasoning_effort": "low",
+            "thinking_token_budget": 2048,
+            "chat_template_kwargs": {
+              "enable_thinking": true,
+              "preserve_thinking": false
+            }
           }
         }
       }
     }
   },
-  "model": "vllm/Qwen/Qwen3.8-27B",
-  "small_model": "vllm/Qwen/Qwen3.8-27B"
+  "model": "vllm/Ornith-1.5-35B-A3B",
+  "small_model": "vllm/Ornith-1.5-35B-A3B"
 }
