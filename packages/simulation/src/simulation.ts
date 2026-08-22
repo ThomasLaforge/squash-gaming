@@ -7,9 +7,12 @@ import {
   FIXED_DT,
   FRONT_OUT_HEIGHT,
   GRAVITY,
+  GROUND_CONTACT_EPSILON,
+  ROLLING_STOP_SPEED,
   RESTITUTION,
   SIMULATION_HZ,
   SOL_FRICTION,
+  SOL_ROLLING_DECELERATION,
   TIN_HEIGHT,
   sideOutHeight
 } from './constants';
@@ -148,6 +151,7 @@ export class Simulation {
     this.assertUsable();
     const beforeVelocity = copyVector(this.ballBody.linvel());
     this.world.step(this.eventQueue);
+    this.applyRollingResistance();
     const position = copyVector(this.ballBody.translation());
 
     this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
@@ -220,6 +224,30 @@ export class Simulation {
       return;
     }
     this.emit({ type: 'IMPACT', ...contact });
+  }
+
+  private applyRollingResistance(): void {
+    const position = copyVector(this.ballBody.translation());
+    const velocity = copyVector(this.ballBody.linvel());
+    if (position.z > BALL_RADIUS + GROUND_CONTACT_EPSILON || velocity.z > 0.1) return;
+
+    const horizontalSpeed = Math.hypot(velocity.x, velocity.y);
+    if (horizontalSpeed === 0) return;
+
+    const speedAfterResistance = Math.max(
+      0,
+      horizontalSpeed - SOL_ROLLING_DECELERATION * this.dt
+    );
+    if (speedAfterResistance <= ROLLING_STOP_SPEED) {
+      this.ballBody.setLinvel(new this.rapier.Vector3(0, 0, velocity.z), true);
+      return;
+    }
+
+    const scale = speedAfterResistance / horizontalSpeed;
+    this.ballBody.setLinvel(
+      new this.rapier.Vector3(velocity.x * scale, velocity.y * scale, velocity.z),
+      true
+    );
   }
 
   private emit(event: GameEvent): void {

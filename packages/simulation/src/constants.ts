@@ -10,6 +10,7 @@ export const BACK_OUT_HEIGHT = 2.13;
 export const TIN_HEIGHT = 0.48;
 export const SERVICE_LINE_HEIGHT = 1.78;
 export const SHORT_LINE_FROM_BACK = 4.26;
+export const SERVICE_BOX_SIZE = 1.6;
 
 export function sideOutHeight(x: number): number {
   return FRONT_OUT_HEIGHT + (BACK_OUT_HEIGHT - FRONT_OUT_HEIGHT) * (x / COURT_LENGTH);
@@ -19,6 +20,10 @@ export const BALL_RADIUS = 0.0425;
 export const BALL_MASS = 0.038;
 export const GRAVITY = -9.81;
 export const SOL_FRICTION = 0.7;
+/** Décélération tangentielle appliquée lorsque la balle roule sur le sol. */
+export const SOL_ROLLING_DECELERATION = 1.25;
+export const ROLLING_STOP_SPEED = 0.03;
+export const GROUND_CONTACT_EPSILON = 0.01;
 export const DRAG = 0;
 
 export const RESTITUTION = {

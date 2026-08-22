@@ -49,6 +49,20 @@ describe('Simulation M1 — laboratoire physique', () => {
     simulation.dispose();
   });
 
+  it('ralentit une balle qui roule sur le sol jusqu’à l’arrêt', async () => {
+    const simulation = await Simulation.create({
+      position: { x: 3, y: 0, z: BALL_RADIUS + 0.002 },
+      velocity: { x: 4, y: 0, z: 0 }
+    });
+
+    for (let tick = 0; tick < 600; tick += 1) simulation.step();
+
+    const state = simulation.getState();
+    expect(state.position.z).toBeGreaterThanOrEqual(BALL_RADIUS - 0.002);
+    expect(Math.hypot(state.velocity.x, state.velocity.y)).toBeLessThanOrEqual(0.03);
+    simulation.dispose();
+  });
+
   it('classe un contact frontal bas comme TIN', async () => {
     const simulation = await Simulation.create({
       position: { x: 2, y: 0, z: TIN_HEIGHT - 0.08 },

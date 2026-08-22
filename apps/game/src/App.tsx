@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { Simulation, type GameEvent, type Vec3 } from '@squash-gaming/simulation';
 
-import { STATUS, type StatusKey } from './status';
 import { FixedStepAccumulator } from './fixed-step';
+import { LAB_SCENARIOS, toSimulationInit, type LabScenario } from './lab-scenarios';
+import {
+  DEFAULT_CAMERA_DISTANCE,
+  DEFAULT_CAMERA_HEIGHT,
+  MAX_CAMERA_DISTANCE,
+  MIN_CAMERA_DISTANCE,
+  SimulationScene,
+  type CourtTheme,
+  type ImpactMarker
+} from './scene/SimulationScene';
+import './app.css';
 
 const SIMULATION_HZ = 120;
-const INITIAL_POSITION: Vec3 = { x: 3, y: 0, z: 1 };
+const DEFAULT_SCENARIO = LAB_SCENARIOS[0] as LabScenario;
 
 function createFixedStepLoop(
   hz: number,
@@ -51,21 +61,29 @@ function formatVector(position: Vec3): string {
 }
 
 export default function App() {
+  const [selectedScenarioId, setSelectedScenarioId] = useState(DEFAULT_SCENARIO.id);
   const [tick, setTick] = useState(0);
-  const [position, setPosition] = useState(INITIAL_POSITION);
+  const [position, setPosition] = useState(DEFAULT_SCENARIO.position);
   const [speed, setSpeed] = useState(0);
   const [lastEvent, setLastEvent] = useState<GameEvent['type'] | '—'>('—');
+  const [trail, setTrail] = useState<Vec3[]>([DEFAULT_SCENARIO.position]);
+  const [impacts, setImpacts] = useState<ImpactMarker[]>([]);
   const [paused, setPaused] = useState(false);
+  const [courtTheme, setCourtTheme] = useState<CourtTheme>('glass');
+  const [cameraHeight, setCameraHeight] = useState(DEFAULT_CAMERA_HEIGHT);
+  const [cameraDistance, setCameraDistance] = useState(DEFAULT_CAMERA_DISTANCE);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const simRef = useRef<Simulation | null>(null);
   const loopRef = useRef<{ stop: () => void } | null>(null);
+  const selectedScenario = LAB_SCENARIOS.find(({ id }) => id === selectedScenarioId) ?? DEFAULT_SCENARIO;
 
   const refresh = (simulation: Simulation) => {
     const snapshot = simulation.getRenderSnapshot();
     setTick(snapshot.tick);
     setPosition(snapshot.position);
     setSpeed(snapshot.speed);
+    setTrail((points) => [...points.slice(-179), snapshot.position]);
   };
 
   const onStep = () => {
@@ -81,7 +99,7 @@ export default function App() {
     let disposed = false;
     let simulation: Simulation | null = null;
 
-    void Simulation.create({ position: INITIAL_POSITION }).then((created) => {
+    void Simulation.create(toSimulationInit(DEFAULT_SCENARIO)).then((created) => {
       if (disposed) {
         created.dispose();
         return;
@@ -89,7 +107,10 @@ export default function App() {
       simulation = created;
       simRef.current = created;
       created.onEvent((event) => {
-        if (event.type !== 'TICK') setLastEvent(event.type);
+        if (event.type !== 'TICK') {
+          setLastEvent(event.type);
+          setImpacts((markers) => [...markers.slice(-79), { type: event.type, point: event.point }]);
+        }
       });
       refresh(created);
       const loop = createFixedStepLoop(SIMULATION_HZ, () => onStepRef.current());
@@ -109,8 +130,25 @@ export default function App() {
   const reset = () => {
     const simulation = simRef.current;
     if (!simulation) return;
-    simulation.reset(INITIAL_POSITION);
+    simulation.reset(selectedScenario.position, selectedScenario.velocity);
     setLastEvent('—');
+    setTrail([selectedScenario.position]);
+    setImpacts([]);
+    refresh(simulation);
+  };
+
+  const selectScenario = (scenarioId: string) => {
+    const scenario = LAB_SCENARIOS.find(({ id }) => id === scenarioId);
+    const simulation = simRef.current;
+    if (!scenario) return;
+
+    setSelectedScenarioId(scenario.id);
+    if (!simulation) return;
+
+    simulation.reset(scenario.position, scenario.velocity);
+    setLastEvent('—');
+    setTrail([scenario.position]);
+    setImpacts([]);
     refresh(simulation);
   };
 
@@ -121,69 +159,207 @@ export default function App() {
     refresh(simulation);
   };
 
-  const statusLines = (Object.entries(STATUS) as [StatusKey, boolean][]).map(
-    ([key, ok]) => [key, ok ? 'OK' : 'À VENIR'] as const
-  );
-
   return (
-    <main
-      style={{
-        fontFamily: 'system-ui, sans-serif',
-        padding: '2rem',
-        color: '#111',
-        background: '#fafafa',
-        minHeight: '100vh'
-      }}
-      data-testid="app"
-    >
-      <h1 style={{ fontSize: '1.5rem', margin: '0 0 0.5rem', fontWeight: 700 }}>
-        Squash Gaming — Laboratoire M1
-      </h1>
-      <p style={{ margin: 0, opacity: 0.7 }}>
-        Balle Rapier headless, court Z-up, pas fixe {SIMULATION_HZ} Hz.
-      </p>
-
-      <section
-        style={{ marginTop: '1.5rem', display: 'grid', gap: '0.5rem', maxWidth: 480 }}
-        data-testid="status"
-        aria-label="Statut des briques du projet"
-      >
-        {statusLines.map(([key, label]) => (
-          <div
-            key={key}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '0.4rem 0.75rem',
-              borderRadius: 6,
-              background: '#fff',
-              border: '1px solid #e2e2e2'
-            }}
-          >
-            <code>{key}</code>
-            <span style={{ fontWeight: 600, opacity: 0.8 }}>{label}</span>
-          </div>
-        ))}
-      </section>
-
-      <section style={{ marginTop: '1.5rem', maxWidth: 560 }} aria-label="État de la balle">
-        <h2 style={{ fontSize: '1rem', marginTop: 0 }}>État de la simulation</h2>
-        <p data-testid="tick">tick = {tick}</p>
-        <p data-testid="position">{formatVector(position)}</p>
-        <p data-testid="speed">vitesse = {speed.toFixed(3)} m/s</p>
-        <p data-testid="last-event">dernier événement = {lastEvent}</p>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button type="button" onClick={() => setPaused((value) => !value)} data-testid="pause-toggle">
-            {paused ? 'Reprendre' : 'Pause'}
-          </button>
-          <button type="button" onClick={stepOnce} data-testid="step-once">
-            Pas suivant
-          </button>
-          <button type="button" onClick={reset} data-testid="reset">
-            Reset
-          </button>
+    <main className="lab-shell" data-testid="app">
+      <header className="lab-header">
+        <div>
+          <p className="eyebrow">M1 · laboratoire de physique</p>
+          <h1>Squash Gaming</h1>
+          <p className="lab-subtitle">Simulation Rapier headless · pas fixe {SIMULATION_HZ} Hz · vue arrière centrée</p>
         </div>
-      </section>
+        <span className="live-indicator">Simulation active</span>
+      </header>
+
+      <div className="lab-content">
+        <section className="court-card" aria-label="Vue physique du court">
+          <div className="court-card-header">
+            <div>
+              <p className="card-kicker">Vue du court</p>
+              <h2>{selectedScenario.name}</h2>
+            </div>
+            <span className="live-indicator">{paused ? 'En pause' : 'En lecture'}</span>
+          </div>
+
+          <div className="court-stage">
+            <SimulationScene theme={courtTheme} cameraHeight={cameraHeight} cameraDistance={cameraDistance} position={position} trail={trail} impacts={impacts} />
+            <div className="stats-overlay" aria-label="Statistiques principales">
+              <div className="stat-pill">
+                <span>Vitesse</span>
+                <strong>{speed.toFixed(2)} m/s</strong>
+              </div>
+              <div className="stat-pill">
+                <span>Hauteur</span>
+                <strong>{position.z.toFixed(2)} m</strong>
+              </div>
+              <div className="stat-pill">
+                <span>Impact</span>
+                <strong>{lastEvent}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="court-caption">
+            <span>Orange : balle · ligne : trajectoire · points : impacts</span>
+            <span>Tick {tick}</span>
+          </div>
+        </section>
+
+        <aside className="lab-sidebar">
+          <section className="control-card" aria-label="Contrôles du laboratoire">
+            <div className="control-card-header">
+              <div>
+                <p className="card-kicker">Configuration</p>
+                <h2>Préparer un test</h2>
+              </div>
+            </div>
+
+            <label className="control-label" htmlFor="scenario-select">
+              Scénario
+              <select
+                id="scenario-select"
+                value={selectedScenario.id}
+                onChange={(event) => selectScenario(event.target.value)}
+                data-testid="scenario-select"
+              >
+                {LAB_SCENARIOS.map((scenario) => (
+                  <option key={scenario.id} value={scenario.id}>
+                    {scenario.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="scenario-description" data-testid="scenario-description">
+              {selectedScenario.description}
+            </p>
+
+            <span className="theme-label">Type de court</span>
+            <div className="segmented-control" aria-label="Type de court">
+              <button
+                type="button"
+                aria-pressed={courtTheme === 'glass'}
+                data-testid="theme-glass"
+                onClick={() => setCourtTheme('glass')}
+              >
+                Vitré
+              </button>
+              <button
+                type="button"
+                aria-pressed={courtTheme === 'indoor'}
+                data-testid="theme-indoor"
+                onClick={() => setCourtTheme('indoor')}
+              >
+                Intérieur
+              </button>
+            </div>
+
+            <div className="slider-control">
+              <span className="theme-label" data-testid="camera-height-label">Hauteur de caméra</span>
+              <div className="slider-row" role="group" aria-label="Position verticale de la caméra">
+                <button
+                  type="button"
+                  data-testid="camera-height-lower"
+                  onClick={() => setCameraHeight((value) => Math.max(0.6, value - 0.6))}
+                  aria-label="Baisser la caméra"
+                >
+                  −
+                </button>
+                <input
+                  type="range"
+                  min={0.6}
+                  max={7}
+                  step={0.1}
+                  value={cameraHeight}
+                  data-testid="camera-height-range"
+                  aria-label="Position verticale de la caméra"
+                  aria-valuetext={`${cameraHeight.toFixed(1)} m`}
+                  onChange={(event) => setCameraHeight(Number(event.target.value))}
+                />
+                <button
+                  type="button"
+                  data-testid="camera-height-raiser"
+                  onClick={() => setCameraHeight((value) => Math.min(7, value + 0.6))}
+                  aria-label="Monter la caméra"
+                >
+                  +
+                </button>
+              </div>
+              <span className="slider-value" data-testid="camera-height-value">
+                {cameraHeight.toFixed(1)} m
+              </span>
+            </div>
+
+            <div className="slider-control">
+              <span className="theme-label" data-testid="camera-distance-label">Distance à la vitre</span>
+              <div className="slider-row" role="group" aria-label="Distance horizontale de la caméra">
+                <button
+                  type="button"
+                  data-testid="camera-distance-closer"
+                  onClick={() => setCameraDistance((value) => Math.max(MIN_CAMERA_DISTANCE, value - 0.8))}
+                  aria-label="Rapprocher de la vitre"
+                >
+                  −
+                </button>
+                <input
+                  type="range"
+                  min={MIN_CAMERA_DISTANCE}
+                  max={MAX_CAMERA_DISTANCE}
+                  step={0.1}
+                  value={cameraDistance}
+                  data-testid="camera-distance-range"
+                  aria-label="Distance horizontale de la caméra"
+                  aria-valuetext={`${cameraDistance.toFixed(1)} m`}
+                  onChange={(event) => setCameraDistance(Number(event.target.value))}
+                />
+                <button
+                  type="button"
+                  data-testid="camera-distance-far"
+                  onClick={() => setCameraDistance((value) => Math.min(MAX_CAMERA_DISTANCE, value + 0.8))}
+                  aria-label="Éloigner de la vitre"
+                >
+                  +
+                </button>
+              </div>
+              <span className="slider-value" data-testid="camera-distance-value">
+                {cameraDistance.toFixed(1)} m
+              </span>
+            </div>
+
+            <div className="action-row">
+              <button type="button" onClick={() => setPaused((value) => !value)} data-testid="pause-toggle">
+                {paused ? 'Reprendre' : 'Pause'}
+              </button>
+              <button type="button" onClick={stepOnce} data-testid="step-once">
+                Pas suivant
+              </button>
+              <button type="button" onClick={reset} data-testid="reset">
+                Réinitialiser le scénario
+              </button>
+            </div>
+          </section>
+
+          <section className="stats-card" aria-label="État détaillé de la balle">
+            <p className="card-kicker">Mesures</p>
+            <h2>État de la balle</h2>
+            <div className="stats-grid">
+              <div className="stat-row speed-row">
+                <span>Vitesse instantanée</span>
+                <strong data-testid="speed">{speed.toFixed(3)} m/s</strong>
+              </div>
+              <div className="stat-row">
+                <span>Tick</span>
+                <strong data-testid="tick">{tick}</strong>
+              </div>
+              <div className="stat-row">
+                <span>Dernier impact</span>
+                <strong data-testid="last-event">{lastEvent}</strong>
+              </div>
+              <div className="stat-row" data-testid="position">
+                <span>Position</span>
+                <strong>{formatVector(position)}</strong>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
     </main>
   );
 }

@@ -45,12 +45,15 @@ Pas de baseline de performance produite dans ce lot.
 
 - L'initialisation Rapier est asynchrone et passe par `Simulation.create()` ; le constructeur ne peut pas créer un monde avant l'initialisation WASM.
 - Le repère officiel M1 reste Z-up, conformément à `docs/m1/params-and-frame-3d.md`.
+- Une résistance au roulement tangentielle est appliquée au contact du sol ;
+  elle empêche une balle en translation de rouler indéfiniment après son rebond.
 
 ## Limites connues
 
 - Le rendu navigateur affiche l'état numérique du laboratoire, mais ne fournit pas encore une scène 3D avec trajectoire et vecteurs.
 - Les scénarios ne sont pas encore exportés comme fichiers de replay autonomes.
-- La traînée reste à zéro, conformément au paramétrage initial M1.
+- La traînée de l'air reste à zéro, conformément au paramétrage initial M1 ; la
+  résistance au roulement du sol est désormais calibrée séparément.
 
 ## À valider par l'humain
 

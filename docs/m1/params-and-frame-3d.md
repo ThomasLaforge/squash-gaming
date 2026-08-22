@@ -36,6 +36,7 @@ front, latéral et arrière).
 | Haut du tin | `TIN_HEIGHT` | `0.48 m` | contact frontal ≤ 0.48 m ⇒ `TIN` |
 | Service-line | `SERVICE_LINE_HEIGHT` | `1.78 m` | documentée, **non utilisée** en M1 |
 | Short-line | `SHORT_LINE_FROM_BACK` | `4.26 m` depuis l'arrière | documentée, **non utilisée** en M1 |
+| Service box | `SERVICE_BOX_SIZE` | `1.60 m` de côté | marquage visuel du laboratoire |
 | Hauteur libre minimale | `CEILING_MIN_HEIGHT` | `5.64 m` | informative |
 
 ### Ligne d'out latérale
@@ -71,6 +72,7 @@ sortie (`OUT`/`TIN`). Les lignes de service et short-line ne déclenchent
 | Masse | `BALL_MASS` | `0.0380 kg` | 38 g (petit point) — calibrable |
 | Coefficient de restitution | `RESTITUTION_{surface}` | voir ci-dessous | coefficient normal au contact |
 | Frottement (sol) | `SOL_FRICTION` | `0.7` | calibrable |
+| Résistance au roulement | `SOL_ROLLING_DECELERATION` | `1.25 m/s²` | décélération tangentielle au sol |
 | Gravité | `GRAVITY` | `9.81 m/s²` | vers `-z` |
 | Traînée (air) | `DRAG` | `0` en M1 | terme quadratique, calibrable |
 
