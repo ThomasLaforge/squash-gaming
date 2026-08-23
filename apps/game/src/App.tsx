@@ -19,7 +19,8 @@ const DEFAULT_SCENARIO = LAB_SCENARIOS[0] as LabScenario;
 
 function createFixedStepLoop(
   hz: number,
-  onStep: () => void
+  onStep: () => void,
+  onFrame: () => void
 ): { start: () => void; stop: () => void; step: () => void } {
   const fixedStep = new FixedStepAccumulator(hz);
   let rafId: number | undefined;
@@ -32,6 +33,7 @@ function createFixedStepLoop(
     const elapsed = time - lastTime;
     lastTime = time;
     fixedStep.advance(elapsed, onStep);
+    onFrame();
     rafId = requestAnimationFrame(frame);
   };
 
@@ -72,6 +74,7 @@ export default function App() {
   const [courtTheme, setCourtTheme] = useState<CourtTheme>('glass');
   const [cameraHeight, setCameraHeight] = useState(DEFAULT_CAMERA_HEIGHT);
   const [cameraDistance, setCameraDistance] = useState(DEFAULT_CAMERA_DISTANCE);
+  const impactSequenceRef = useRef(0);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const simRef = useRef<Simulation | null>(null);
@@ -94,10 +97,13 @@ export default function App() {
   };
   const onStepRef = useRef(onStep);
   onStepRef.current = onStep;
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
 
   useEffect(() => {
     let disposed = false;
     let simulation: Simulation | null = null;
+    let unsubscribe: (() => void) | undefined;
 
     void Simulation.create(toSimulationInit(DEFAULT_SCENARIO)).then((created) => {
       if (disposed) {
@@ -106,14 +112,22 @@ export default function App() {
       }
       simulation = created;
       simRef.current = created;
-      created.onEvent((event) => {
+      unsubscribe = created.onEvent((event) => {
         if (event.type !== 'TICK') {
           setLastEvent(event.type);
-          setImpacts((markers) => [...markers.slice(-79), { type: event.type, point: event.point }]);
+          const id = impactSequenceRef.current;
+          impactSequenceRef.current += 1;
+          setImpacts((markers) => [...markers.slice(-79), { id, type: event.type, point: event.point }]);
         }
       });
       refresh(created);
-      const loop = createFixedStepLoop(SIMULATION_HZ, () => onStepRef.current());
+      const loop = createFixedStepLoop(
+        SIMULATION_HZ,
+        () => onStepRef.current(),
+        () => {
+          if (!pausedRef.current) refreshRef.current(created);
+        }
+      );
       loopRef.current = loop;
       loop.start();
     });
@@ -123,6 +137,7 @@ export default function App() {
       loopRef.current?.stop();
       loopRef.current = null;
       simRef.current = null;
+      unsubscribe?.();
       simulation?.dispose();
     };
   }, []);

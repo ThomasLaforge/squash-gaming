@@ -189,6 +189,8 @@ export class Simulation {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.listeners.clear();
+    this.surfaces.clear();
     this.eventQueue.free();
     this.world.free();
   }

@@ -16,6 +16,7 @@ import {
 import type { Vec3 } from '@squash-gaming/simulation';
 
 export interface ImpactMarker {
+  id: number;
   type: string;
   point: Vec3;
 }
@@ -45,6 +46,8 @@ const REAR_VIEW = {
   position: [COURT_LENGTH + 6.1, 5.0, 0] as [number, number, number],
   lookAt: [COURT_LENGTH / 2, 1.0, 0] as [number, number, number]
 };
+
+const TRAIL_CAPACITY = 180;
 
 export const DEFAULT_CAMERA_HEIGHT = 5.0;
 export const DEFAULT_CAMERA_DISTANCE = 6.1;
@@ -249,35 +252,44 @@ function Ball({ position, squash = 0 }: { position: Vec3; squash?: number }) {
 
 function Trajectory({ points }: { points: Vec3[] }) {
   const line = useMemo(
-    () =>
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+    () => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_CAPACITY * 3), 3));
+      geometry.setDrawRange(0, 0);
+      const trajectory = new THREE.Line(
+        geometry,
         new THREE.LineBasicMaterial({ color: '#f08a24', transparent: true, opacity: 0.8 })
-      ),
+      );
+      trajectory.frustumCulled = false;
+      return trajectory;
+    },
     []
   );
-  const vertices = useMemo(() => points.map((point) => new THREE.Vector3(...toView(point))), [points]);
 
   useEffect(() => {
-    const previousGeometry = line.geometry;
-    line.geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-    previousGeometry.dispose();
-  }, [line, vertices]);
+    const position = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const visiblePoints = Math.min(points.length, TRAIL_CAPACITY);
+    for (let index = 0; index < visiblePoints; index += 1) {
+      const point = points[index];
+      position.setXYZ(index, point.x, point.z, point.y);
+    }
+    position.needsUpdate = true;
+    line.geometry.setDrawRange(0, visiblePoints);
+  }, [line, points]);
 
   useEffect(() => () => {
     line.geometry.dispose();
     line.material.dispose();
   }, [line]);
 
-  if (vertices.length < 2) return null;
   return <primitive object={line} />;
 }
 
 function ImpactMarkers({ impacts }: { impacts: ImpactMarker[] }) {
   return (
     <group>
-      {impacts.map((impact, index) => (
-        <mesh key={`${impact.type}-${index}`} position={toView(impact.point)}>
+      {impacts.map((impact) => (
+        <mesh key={impact.id} position={toView(impact.point)}>
           <sphereGeometry args={[0.075, 12, 8]} />
           <meshBasicMaterial color={impact.type === 'TIN' || impact.type === 'OUT' ? '#d64045' : '#2d78c7'} />
         </mesh>

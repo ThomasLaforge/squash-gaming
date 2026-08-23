@@ -23,12 +23,12 @@ suivant et reset.
 | AC09 | À VALIDER PAR L'HUMAIN | laboratoire navigateur avec pause/reprise/pas/reset ; replay visuel complet à enrichir |
 | AC10 | PASS AUTOMATIQUE | reset vérifié dans le test navigateur et l'état initial est versionné |
 | AC11 | PASS AUTOMATIQUE | `packages/simulation/tests/architecture.test.ts` |
-| AC12 | À FAIRE | baseline de performance et calibrage visuel non mesurés dans ce lot |
+| AC12 | PASS PARTIEL | baseline locale de garde-fous documentée ; mesure FPS/mémoire dépendante du navigateur à confirmer humainement |
 
 ## Validation automatisée
 
 - Commande : `pnpm validate`
-- Résultat : PASS — lint, typecheck, 34 tests unitaires, 4 tests Playwright et build.
+- Résultat : PASS — lint, typecheck, 35 tests unitaires, 6 tests Playwright et build.
 - Environnement : Node 24.16.0, pnpm 11.13.1, Rapier `@dimforge/rapier3d-compat` 0.20.0.
 
 ## Scénarios et replays
@@ -39,7 +39,12 @@ suivant et reset.
 
 ## Mesures
 
-Pas de baseline de performance produite dans ce lot.
+- Simulation : 120 Hz fixe.
+- Publication vers React et le rendu : au plus une fois par frame navigateur.
+- Historique de trajectoire : 180 points maximum, dans une `BufferGeometry` réutilisée.
+- Impacts affichés : 80 marqueurs maximum, avec identifiants stables.
+- Build production : 3,97 MB JavaScript minifié, 1,39 MB gzip ; Vite signale un chunk supérieur à 500 kB.
+- Une mesure FPS/mémoire représentative reste dépendante du navigateur, de la résolution et du GPU ; elle doit être relevée lors de la validation humaine.
 
 ## Décisions et écarts
 
@@ -50,10 +55,11 @@ Pas de baseline de performance produite dans ce lot.
 
 ## Limites connues
 
-- Le rendu navigateur affiche l'état numérique du laboratoire, mais ne fournit pas encore une scène 3D avec trajectoire et vecteurs.
+- Le rendu navigateur affiche l'état numérique du laboratoire et une scène 3D de validation ; il ne fournit pas encore de vecteurs de debug ni de replay exportable.
 - Les scénarios ne sont pas encore exportés comme fichiers de replay autonomes.
 - La traînée de l'air reste à zéro, conformément au paramétrage initial M1 ; la
   résistance au roulement du sol est désormais calibrée séparément.
+- La stabilité mémoire doit être confirmée sur une session longue dans le navigateur ; le rendu réutilise désormais ses buffers principaux et borne ses historiques.
 
 ## À valider par l'humain
 
