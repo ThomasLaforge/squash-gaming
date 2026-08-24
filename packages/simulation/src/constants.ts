@@ -36,3 +36,17 @@ export const RESTITUTION = {
 export const SIMULATION_HZ = 120;
 export const FIXED_DT = 1 / SIMULATION_HZ;
 export const TUNNELING_REF_SPEED = 100;
+
+export const PLAYER_RADIUS = 0.35;
+export const PLAYER_MAX_SPEED = 4.6;
+export const PLAYER_ACCELERATION = 16;
+export const PLAYER_BRAKING = 22;
+export const PLAYER_TURN_SPEED = 10;
+export const PLAYER_LUNGE_DISTANCE = 1.15;
+export const PLAYER_ASSIST_STRENGTH = 0.15;
+export const PLAYER_MIN_X = PLAYER_RADIUS;
+export const PLAYER_MAX_X = COURT_LENGTH - PLAYER_RADIUS;
+export const PLAYER_MIN_Y = -COURT_HALF_WIDTH + PLAYER_RADIUS;
+export const PLAYER_MAX_Y = COURT_HALF_WIDTH - PLAYER_RADIUS;
+export const T_POSITION = COURT_LENGTH - SHORT_LINE_FROM_BACK;
+export const INTERCEPTION_HORIZON = 3;

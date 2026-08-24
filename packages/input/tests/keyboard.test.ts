@@ -5,25 +5,34 @@ import { KeyboardAdapter } from '../src';
 const SIM_HZ = 120;
 
 function makeTarget() {
-  const listeners: Record<string, ((event: { code: string }) => void)[]> = {};
+  type KeyboardEventLike = { key: string; preventDefault?: () => void };
+  const listeners: Record<string, ((event: KeyboardEventLike) => void)[]> = {};
+  const preventedKeys: string[] = [];
   return {
-    addEventListener(type: string, listener: (event: { code: string }) => void) {
+    addEventListener(type: string, listener: (event: KeyboardEventLike) => void) {
       (listeners[type] ??= []).push(listener);
     },
-    removeEventListener(type: string, listener: (event: { code: string }) => void) {
+    removeEventListener(type: string, listener: (event: KeyboardEventLike) => void) {
       listeners[type] = (listeners[type] ?? []).filter((l) => l !== listener);
     },
-    press(code: string) {
-      listeners.keydown?.forEach((l) => l({ code }));
+    press(key: string) {
+      listeners.keydown?.forEach((l) => l({ key }));
     },
-    release(code: string) {
-      listeners.keyup?.forEach((l) => l({ code }));
+    release(key: string) {
+      listeners.keyup?.forEach((l) => l({ key }));
+    },
+    preventedKeys,
+    pressWithPreventDefault(key: string) {
+      listeners.keydown?.forEach((l) => l({
+        key,
+        preventDefault: () => preventedKeys.push(key)
+      }));
     }
   };
 }
 
 describe('KeyboardAdapter → contrat sémantique commun', () => {
-  it('WASD maintenues produisent le même échantillon de mouvement qu’un stick', () => {
+  it('ZQSD maintenues produisent le même échantillon de mouvement qu’un stick', () => {
     const target = makeTarget();
     const actions: GameAction[] = [];
     const adapter = new KeyboardAdapter({
@@ -32,13 +41,13 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     });
     adapter.attach(target);
 
-    target.press('KeyW');
-    target.press('KeyA');
+    target.press('z');
+    target.press('q');
     const frame = adapter.sample();
     // Haut + gauche ; le clavier émet des directions unitaires.
     expect(frame.movement).toEqual({ x: -1, y: -1 });
 
-    target.release('KeyW');
+    target.release('z');
     const frame2 = adapter.sample();
     expect(frame2.movement).toEqual({ x: -1, y: 0 });
 
@@ -53,7 +62,7 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     const adapter = new KeyboardAdapter({ simulationHz: SIM_HZ, now: () => 0.5 });
     adapter.attach(target);
 
-    target.press('Space');
+    target.press(' ');
     const frame = adapter.sample();
     expect(frame.shotEdges).toEqual(['length']);
 
@@ -62,9 +71,20 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     expect(intent?.type).toBe('length');
     expect(intent?.requestedAtTick).toBe(60); // 0.5 s × 120 Hz
 
-    target.release('Space');
+    target.release(' ');
     const after = adapter.consumeShotIntent();
     expect(after).toBeNull();
+  });
+
+  it('empêche le navigateur de faire défiler la page avec une touche assignée', () => {
+    const target = makeTarget();
+    const adapter = new KeyboardAdapter({ simulationHz: SIM_HZ });
+    adapter.attach(target);
+
+    target.pressWithPreventDefault(' ');
+    target.pressWithPreventDefault('x');
+
+    expect(target.preventedKeys).toEqual([' ']);
   });
 
   it('E (lob) produit une intention distincte de Space (length)', () => {
@@ -72,19 +92,19 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     const adapter = new KeyboardAdapter({ simulationHz: SIM_HZ, now: () => 1 });
     adapter.attach(target);
 
-    target.press('KeyE');
+    target.press('e');
     adapter.sample();
     expect(adapter.consumeShotIntent()?.type).toBe('lob');
 
-    target.press('Space');
+    target.press(' ');
     adapter.sample();
     expect(adapter.consumeShotIntent()?.type).toBe('length');
 
-    target.press('ShiftLeft');
+    target.press('Shift');
     adapter.sample();
     expect(adapter.consumeShotIntent()?.type).toBe('drop');
 
-    target.press('KeyQ');
+    target.press('r');
     adapter.sample();
     expect(adapter.consumeShotIntent()?.type).toBe('push');
   });
@@ -94,11 +114,11 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     const adapter = new KeyboardAdapter({ simulationHz: SIM_HZ });
     adapter.attach(target);
 
-    target.press('KeyF');
+    target.press('f');
     expect(adapter.sample().focus).toBe(true);
     expect(adapter.sample().focus).toBe(true);
 
-    target.release('KeyF');
+    target.release('f');
     expect(adapter.sample().focus).toBe(false);
   });
 
@@ -111,8 +131,8 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     });
     adapter.attach(target);
 
-    target.press('KeyE');
-    target.press('KeyE'); // auto-repeat simulé
+    target.press('e');
+    target.press('e'); // auto-repeat simulé
     adapter.sample();
     const pressEdges = actions.filter((a) => a.kind === 'press-shot');
     expect(pressEdges).toHaveLength(1);
@@ -131,9 +151,28 @@ describe('KeyboardAdapter → contrat sémantique commun', () => {
     });
     adapter.attach(target);
 
-    target.press('KeyW');
+    target.press('w');
     expect(adapter.sample().movement).toEqual({ x: 0, y: 0 });
 
+    target.press('ArrowUp');
+    expect(adapter.sample().movement).toEqual({ x: 0, y: -1 });
+  });
+
+  it('un remapping à chaud réinitialise les touches maintenues', () => {
+    const target = makeTarget();
+    const adapter = new KeyboardAdapter({ simulationHz: SIM_HZ });
+    adapter.attach(target);
+    target.press('z');
+    expect(adapter.sample().movement.y).toBe(-1);
+
+    adapter.setMapping({
+      movement: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
+      shots: {},
+      effort: {},
+      focus: null
+    });
+
+    expect(adapter.sample().movement).toEqual({ x: 0, y: 0 });
     target.press('ArrowUp');
     expect(adapter.sample().movement).toEqual({ x: 0, y: -1 });
   });

@@ -17,6 +17,9 @@ import {
   sideOutHeight
 } from './constants';
 import { COURT_SURFACES, type CourtSurface } from './court';
+import { advanceGhosting, createGhostingState, startGhosting, type GhostingState } from './ghosting';
+import { advancePlayer, createPlayerState, estimateInterception } from './player';
+import { solveShot } from './shot-solver';
 import { getRapier } from './rapier';
 import type {
   ContactInfo,
@@ -25,6 +28,9 @@ import type {
   RenderSnapshot,
   SimulationInit,
   SimulationState,
+  PlayerState,
+  InterceptionEstimate,
+  ShotResult,
   Vec3
 } from './types';
 
@@ -54,6 +60,12 @@ export class Simulation {
   private readonly dt: number;
   private readonly initialPosition: Vec3;
   private readonly initialVelocity: Vec3;
+  private readonly initialPlayerPosition: Vec3;
+  private readonly gravity: number;
+  private readonly assistStrength: number;
+  private playerState: PlayerState;
+  private ghostingState: GhostingState = createGhostingState();
+  private lastShot: ShotResult | null = null;
   private tickCount = 0;
   private floorContactCount = 0;
   private disposed = false;
@@ -61,9 +73,13 @@ export class Simulation {
   private constructor(rapier: typeof Rapier, init: SimulationInit) {
     this.rapier = rapier;
     this.dt = init.dt ?? FIXED_DT;
-    this.initialPosition = init.position ?? { x: 3, y: 0, z: 1 };
-    this.initialVelocity = init.velocity ?? ZERO;
+    this.initialPosition = { ...(init.position ?? { x: 3, y: 0, z: 1 }) };
+    this.initialVelocity = { ...(init.velocity ?? ZERO) };
+    this.initialPlayerPosition = { ...(init.playerPosition ?? { x: 5.49, y: 0, z: 0 }) };
     const gravity = init.gravity ?? GRAVITY;
+    this.gravity = gravity;
+    this.assistStrength = init.assistStrength ?? 0.15;
+    this.playerState = createPlayerState(this.initialPlayerPosition);
 
     this.world = new rapier.World(new rapier.Vector3(0, 0, gravity));
     this.world.timestep = this.dt;
@@ -143,12 +159,82 @@ export class Simulation {
 
   getRenderSnapshot(): RenderSnapshot {
     const state = this.getState();
-    return { ...state, speed: speed(state.velocity) };
+    const player = this.getPlayerState();
+    return {
+      ...state,
+      speed: speed(state.velocity),
+      player,
+      interception: this.getInterceptionEstimate(player),
+      ghosting: { ...this.ghostingState },
+      lastShot: this.lastShot
+        ? { ...this.lastShot, outputVelocity: { ...this.lastShot.outputVelocity } }
+        : null
+    };
+  }
+
+  startGhosting(): void {
+    this.assertUsable();
+    this.ghostingState = startGhosting();
+  }
+
+  resetGhosting(): void {
+    this.assertUsable();
+    this.ghostingState = createGhostingState();
+  }
+
+  getGhostingState(): GhostingState {
+    return { ...this.ghostingState };
+  }
+
+  getPlayerState(): PlayerState {
+    return {
+      ...this.playerState,
+      position: { ...this.playerState.position },
+      velocity: { ...this.playerState.velocity }
+    };
+  }
+
+  getInterceptionEstimate(player = this.playerState): InterceptionEstimate {
+    return estimateInterception(
+      {
+        position: copyVector(this.ballBody.translation()),
+        velocity: copyVector(this.ballBody.linvel())
+      },
+      player,
+      this.gravity
+    );
   }
 
   /** Avance exactement un pas fixe. Les entrées sont réservées aux milestones suivants. */
-  step(_input?: PlayerInput): void {
+  step(input: PlayerInput = EMPTY_INPUT): void {
     this.assertUsable();
+    this.playerState = advancePlayer(
+      this.playerState,
+      input,
+      this.getInterceptionEstimate(),
+      this.dt,
+      this.assistStrength
+    );
+    if (input.shot) {
+      const result = solveShot(
+        input.shot,
+        this.playerState,
+        {
+          position: copyVector(this.ballBody.translation()),
+          velocity: copyVector(this.ballBody.linvel())
+        },
+        input.aim
+      );
+      this.lastShot = result;
+      this.emit({ type: 'SHOT', result });
+      if (result.accepted) {
+        this.ballBody.setLinvel(
+          new this.rapier.Vector3(result.outputVelocity.x, result.outputVelocity.y, result.outputVelocity.z),
+          true
+        );
+      }
+    }
+    this.ghostingState = advanceGhosting(this.ghostingState, this.playerState);
     const beforeVelocity = copyVector(this.ballBody.linvel());
     this.world.step(this.eventQueue);
     this.applyRollingResistance();
@@ -177,12 +263,15 @@ export class Simulation {
     this.step(input);
   }
 
-  reset(position = this.initialPosition, velocity = this.initialVelocity): void {
+  reset(position = this.initialPosition, velocity = this.initialVelocity, playerPosition = this.initialPlayerPosition): void {
     this.assertUsable();
     this.ballBody.setTranslation(new this.rapier.Vector3(position.x, position.y, position.z), true);
     this.ballBody.setLinvel(new this.rapier.Vector3(velocity.x, velocity.y, velocity.z), true);
     this.tickCount = 0;
     this.floorContactCount = 0;
+    this.playerState = createPlayerState(playerPosition);
+    this.ghostingState = createGhostingState();
+    this.lastShot = null;
     this.eventQueue.clear();
   }
 
@@ -260,6 +349,14 @@ export class Simulation {
     if (this.disposed) throw new Error('La simulation a été libérée');
   }
 }
+
+const EMPTY_INPUT: PlayerInput = {
+  movement: { x: 0, y: 0 },
+  aim: { x: 0, y: 0 },
+  shot: null,
+  effort: 0,
+  focus: false
+};
 
 function contactWithoutSurface(contact: ContactInfo): Omit<ContactInfo, 'surface'> {
   return {

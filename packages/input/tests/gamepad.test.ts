@@ -26,17 +26,17 @@ function withButton(pad: GamepadLike, index: number, pressed: boolean): GamepadL
 }
 
 function makeKeyboardTarget() {
-  const listeners: Record<string, ((e: { code: string }) => void)[]> = { keydown: [], keyup: [] };
+  const listeners: Record<string, ((e: { key: string }) => void)[]> = { keydown: [], keyup: [] };
   return {
-    addEventListener(type: string, l: (e: { code: string }) => void) {
+    addEventListener(type: string, l: (e: { key: string }) => void) {
       listeners[type].push(l);
     },
     removeEventListener() {},
-    press(code: string) {
-      listeners.keydown.forEach((l) => l({ code }));
+    press(key: string) {
+      listeners.keydown.forEach((l) => l({ key }));
     },
-    release(code: string) {
-      listeners.keyup.forEach((l) => l({ code }));
+    release(key: string) {
+      listeners.keyup.forEach((l) => l({ key }));
     }
   };
 }
@@ -50,14 +50,14 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
     expect(adapter.poll().movement).toEqual({ x: 0, y: 0 });
 
     holder.pad = makePad({ axes: [-1, 0, 0, 0] });
-    expect(adapter.poll().movement).toEqual({ x: -(1 - DEADZONE), y: 0 });
+    expect(adapter.poll().movement).toEqual({ x: -1, y: 0 });
 
     holder.pad = makePad({ axes: [0, -1, 0, 0] });
-    expect(adapter.poll().movement).toEqual({ x: 0, y: -(1 - DEADZONE) });
+    expect(adapter.poll().movement).toEqual({ x: 0, y: -1 });
 
     // Mi-course : la sortie reste mi-course (pas de renormalisation).
     holder.pad = makePad({ axes: [-0.5, 0, 0, 0] });
-    expect(adapter.poll().movement).toEqual({ x: -(0.5 - DEADZONE), y: 0 });
+    expect(adapter.poll().movement.x).toBeCloseTo(-(0.5 - DEADZONE) / (1 - DEADZONE), 6);
     // Diagonale mi-course : l’angle est préservé (x = y).
     holder.pad = makePad({ axes: [0.5, 0.5, 0, 0] });
     const diag = adapter.poll().movement;
@@ -92,7 +92,7 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
     holder.pad = makePad({ axes: [0, 0, 1, 0] });
     const frame = adapter.poll();
     expect(frame.movement).toEqual({ x: 0, y: 0 });
-    expect(frame.aim).toEqual({ x: 1 - DEADZONE, y: 0 });
+    expect(frame.aim).toEqual({ x: 1, y: 0 });
   });
 
   it('un mapping custom remappe réellement les axes de mouvement et de visée', () => {
@@ -114,10 +114,10 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
     });
 
     const frame = adapter.poll();
-    expect(frame.movement.x).toBeCloseTo(-(1 - DEADZONE), 6);
+    expect(frame.movement.x).toBeCloseTo(-1, 6);
     expect(frame.movement.y).toBe(0);
     expect(frame.aim.x).toBe(0);
-    expect(frame.aim.y).toBeCloseTo(0.8 - DEADZONE, 6);
+    expect(frame.aim.y).toBeCloseTo((0.8 - DEADZONE) / (1 - DEADZONE), 6);
   });
 
   it('les quatre boutons de coup émettent les press-shots corrects', () => {
@@ -197,11 +197,11 @@ describe('GamepadAdapter → contrat sémantique commun', () => {
 });
 
 describe('Contrat sémantique commun clavier/manette (AC07)', () => {
-  it('déplacement : W au clavier ≡ stick haut à la manette → mêmes échantillons', () => {
+  it('déplacement : Z au clavier ≡ stick haut à la manette → mêmes échantillons', () => {
     const target = makeKeyboardTarget();
     const keyboard = new KeyboardAdapter({ simulationHz: SIM_HZ, now: () => 0 });
     keyboard.attach(target);
-    target.press('KeyW');
+    target.press('z');
     const kFrame = keyboard.sample();
 
     const holder: { pad: GamepadLike | null } = { pad: makePad({ axes: [0, -1, 0, 0] }) };
@@ -212,11 +212,11 @@ describe('Contrat sémantique commun clavier/manette (AC07)', () => {
     });
     const gFrame = gamepad.poll();
 
-    // Le clavier émet des directions unitaires ; la manette applique la
-    // dead zone radiale : les amplitudes ne sont pas les mêmes, mais les
-    // directions et l’intention le sont.
+    // Les deux adaptateurs exposent la même direction et la même amplitude
+    // normalisée pour une direction pleine course.
     expect(kFrame.movement.y).toBeLessThan(0);
     expect(gFrame.movement.y).toBeLessThan(0);
+    expect(gFrame.movement.y).toBeCloseTo(kFrame.movement.y, 6);
     expect(kFrame.shotEdges).toEqual(gFrame.shotEdges);
     expect(kFrame.effortDelta).toBe(gFrame.effortDelta);
   });
@@ -226,7 +226,7 @@ describe('Contrat sémantique commun clavier/manette (AC07)', () => {
     let clock = 0.25;
     const keyboard = new KeyboardAdapter({ simulationHz: SIM_HZ, now: () => clock });
     keyboard.attach(target);
-    target.press('Space');
+    target.press(' ');
     keyboard.sample();
     const kIntent = keyboard.consumeShotIntent();
 
@@ -251,7 +251,7 @@ describe('Contrat sémantique commun clavier/manette (AC07)', () => {
     const target = makeKeyboardTarget();
     const keyboard = new KeyboardAdapter({ simulationHz: SIM_HZ, now: () => 0 });
     keyboard.attach(target);
-    target.press('KeyF');
+    target.press('f');
 
     const holder: { pad: GamepadLike | null } = { pad: withButton(makePad(), 4, true) };
     const gamepad = new GamepadAdapter({

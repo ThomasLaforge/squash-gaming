@@ -8,12 +8,14 @@ import {
   COURT_HALF_WIDTH,
   COURT_LENGTH,
   FRONT_OUT_HEIGHT,
+  GHOSTING_HIT_RADIUS,
+  GHOSTING_ROUTE,
   SERVICE_BOX_SIZE,
   SERVICE_LINE_HEIGHT,
   SHORT_LINE_FROM_BACK,
   TIN_HEIGHT
 } from '@squash-gaming/simulation';
-import type { Vec3 } from '@squash-gaming/simulation';
+import type { GhostingState, InterceptionEstimate, PlayerState, Vec3 } from '@squash-gaming/simulation';
 
 export interface ImpactMarker {
   id: number;
@@ -32,6 +34,9 @@ interface SimulationSceneProps {
   position: Vec3;
   trail: Vec3[];
   impacts: ImpactMarker[];
+  player: PlayerState;
+  interception: InterceptionEstimate;
+  ghosting: GhostingState;
   squash?: number;
   theme?: CourtTheme;
   cameraHeight?: number;
@@ -250,6 +255,80 @@ function Ball({ position, squash = 0 }: { position: Vec3; squash?: number }) {
   );
 }
 
+function PlayerPlaceholder({ player }: { player: PlayerState }) {
+  const color = player.stance === 'lunging' ? '#f0b35b' : '#65c6c8';
+  return (
+    <group position={toView(player.position)} rotation={[0, -player.facing, 0]}>
+      <mesh position={[0, 0.82, 0]} castShadow>
+        <capsuleGeometry args={[0.24, 1.15, 8, 16]} />
+        <meshStandardMaterial color={color} roughness={0.55} />
+      </mesh>
+      <mesh position={[0.34, 0.88, 0]} rotation={[0, 0, -Math.PI / 2]}>
+        <coneGeometry args={[0.1, 0.3, 3]} />
+        <meshBasicMaterial color="#f7f3dc" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
+        <torusGeometry args={[0.38, 0.025, 8, 24]} />
+        <meshBasicMaterial color={color} transparent opacity={0.7} />
+      </mesh>
+    </group>
+  );
+}
+
+function InterceptionGuide({ player, target }: { player: PlayerState; target: InterceptionEstimate }) {
+  const line = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const guide = new THREE.Line(
+      geometry,
+      new THREE.LineDashedMaterial({ color: '#f7d27c', dashSize: 0.18, gapSize: 0.12, transparent: true, opacity: 0.8 })
+    );
+    guide.frustumCulled = false;
+    return guide;
+  }, []);
+
+  useEffect(() => {
+    const position = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+    position.setXYZ(0, player.position.x, 0.04, player.position.y);
+    position.setXYZ(1, target.position.x, 0.04, target.position.y);
+    position.needsUpdate = true;
+    line.computeLineDistances();
+  }, [line, player.position, target.position]);
+
+  useEffect(() => () => {
+    line.geometry.dispose();
+    line.material.dispose();
+  }, [line]);
+
+  return <primitive object={line} />;
+}
+
+function InterceptionMarker({ target }: { target: InterceptionEstimate }) {
+  return (
+    <mesh position={toView({ ...target.position, z: 0.03 })} rotation={[-Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[0.22, 0.035, 8, 24]} />
+      <meshBasicMaterial color={target.reachable ? '#f7d27c' : '#d66b70'} />
+    </mesh>
+  );
+}
+
+function GhostingRoute({ ghosting }: { ghosting: GhostingState }) {
+  return (
+    <group>
+      {GHOSTING_ROUTE.map((target, index) => {
+        const isCurrent = ghosting.status === 'running' && index === ghosting.targetIndex;
+        const isComplete = index < ghosting.completedTargets;
+        return (
+          <mesh key={target.id} position={toView({ ...target.position, z: 0.035 })} rotation={[-Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[isCurrent ? GHOSTING_HIT_RADIUS : 0.13, isCurrent ? 0.04 : 0.018, 8, 20]} />
+            <meshBasicMaterial color={isComplete ? '#6ed39a' : isCurrent ? '#f7d27c' : '#8da3ad'} transparent opacity={isCurrent || isComplete ? 0.95 : 0.5} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
 function Trajectory({ points }: { points: Vec3[] }) {
   const line = useMemo(
     () => {
@@ -298,7 +377,7 @@ function ImpactMarkers({ impacts }: { impacts: ImpactMarker[] }) {
   );
 }
 
-function SceneContents({ position, trail, impacts, squash, theme, cameraHeight, cameraDistance }: Required<SimulationSceneProps & { cameraHeight: number; cameraDistance: number }>) {
+function SceneContents({ position, trail, impacts, player, interception, ghosting, squash, theme, cameraHeight, cameraDistance }: Required<SimulationSceneProps & { cameraHeight: number; cameraDistance: number }>) {
   return (
     <>
       <CameraSetup cameraHeight={cameraHeight} cameraDistance={cameraDistance} />
@@ -308,6 +387,10 @@ function SceneContents({ position, trail, impacts, squash, theme, cameraHeight, 
       <Court theme={theme} />
       <Trajectory points={trail} />
       <ImpactMarkers impacts={impacts} />
+      <GhostingRoute ghosting={ghosting} />
+      <InterceptionGuide player={player} target={interception} />
+      <InterceptionMarker target={interception} />
+      <PlayerPlaceholder player={player} />
       <Ball position={position} squash={squash} />
     </>
   );

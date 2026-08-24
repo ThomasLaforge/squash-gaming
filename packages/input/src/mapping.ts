@@ -2,8 +2,9 @@ import type { ShotAction } from './types';
 
 /**
  * Mapping périphérique → actions sémantiques.
- * Les codes bruts (KeyboardEvent.code, indices de boutons manette) restent
- * du côté de l'adaptateur ; le gameplay ne les connaît pas (ADR 0004).
+ * Les touches logiques du clavier (KeyboardEvent.key) et les indices de
+ * boutons de manette restent du côté des adaptateurs ; le gameplay ne les
+ * connaît pas (ADR 0004).
  */
 interface ActionMapping {
   shots: Partial<Record<string, ShotAction>>;
@@ -24,12 +25,12 @@ export interface GamepadMapping extends ActionMapping {
   };
 }
 
-/** Clavier WQSD/EUSA : WASD, Espace = length, Maj = drop, E = lob, Q = push, F = focus. */
+/** Clavier AZERTY : ZQSD, Espace = length, Maj = drop, E = lob, R = push, F = focus. */
 export const DEFAULT_KEYBOARD_MAPPING: KeyboardMapping = {
-  movement: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' },
-  shots: { Space: 'length', ShiftLeft: 'drop', KeyE: 'lob', KeyQ: 'push' },
+  movement: { up: 'z', down: 's', left: 'q', right: 'd' },
+  shots: { ' ': 'length', Shift: 'drop', e: 'lob', r: 'push' },
   effort: {},
-  focus: 'KeyF'
+  focus: 'f'
 };
 
 /** Manette standard : stick gauche pour le déplacement, stick droit pour la visée. */
@@ -44,13 +45,13 @@ export const DEFAULT_GAMEPAD_MAPPING: GamepadMapping = {
 };
 
 /**
- * Applique une dead zone radiale non normalisée : l'amplitude de sortie
- * est proportionnelle à (magnitude − seuil), pas à l'angle. Un stick à
- * mi-course (magnitude 0.5) sort donc mi-course, quel que soit son angle.
- * Zéro sous le seuil.
+ * Applique une dead zone radiale puis renormalise l'amplitude restante sur
+ * [0, 1]. Ainsi une direction pleine course au clavier et à la manette
+ * produisent la même amplitude sémantique.
  */
 export function applyDeadZone(x: number, y: number, deadZone: number): { x: number; y: number } {
   const magnitude = Math.hypot(x, y);
   if (magnitude <= deadZone) return { x: 0, y: 0 };
-  return { x: x - (x / magnitude) * deadZone, y: y - (y / magnitude) * deadZone };
+  const normalizedMagnitude = Math.min(1, (magnitude - deadZone) / (1 - deadZone));
+  return { x: (x / magnitude) * normalizedMagnitude, y: (y / magnitude) * normalizedMagnitude };
 }

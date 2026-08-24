@@ -1,8 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { Simulation, type GameEvent, type Vec3 } from '@squash-gaming/simulation';
+import {
+  createPlayerState,
+  Simulation,
+  type GameEvent,
+  type GhostingState,
+  type InterceptionEstimate,
+  type PlayerInput,
+  type PlayerState,
+  type ShotResult,
+  type Vec3
+} from '@squash-gaming/simulation';
+import { DEFAULT_KEYBOARD_MAPPING, GamepadAdapter, KeyboardAdapter, type KeyboardMapping } from '@squash-gaming/input';
 
 import { FixedStepAccumulator } from './fixed-step';
+import { BallStatsCard } from './BallStatsCard';
+import { GhostingPanel } from './GhostingPanel';
+import { KeyboardBindingsPanel } from './KeyboardBindingsPanel';
 import { LAB_SCENARIOS, toSimulationInit, type LabScenario } from './lab-scenarios';
+import { PlayerStatsCard } from './PlayerStatsCard';
 import {
   DEFAULT_CAMERA_DISTANCE,
   DEFAULT_CAMERA_HEIGHT,
@@ -16,6 +31,24 @@ import './app.css';
 
 const SIMULATION_HZ = 120;
 const DEFAULT_SCENARIO = LAB_SCENARIOS[0] as LabScenario;
+const DEFAULT_PLAYER = createPlayerState();
+const DEFAULT_INTERCEPTION: InterceptionEstimate = {
+  position: { x: DEFAULT_SCENARIO.position.x, y: DEFAULT_SCENARIO.position.y, z: 0 },
+  time: 0,
+  distance: 0,
+  reachable: false
+};
+const DEFAULT_GHOSTING: GhostingState = {
+  status: 'idle',
+  targetIndex: 0,
+  elapsedTicks: 0,
+  completedTargets: 0
+};
+
+interface InputSources {
+  keyboard: KeyboardAdapter;
+  gamepad: GamepadAdapter;
+}
 
 function createFixedStepLoop(
   hz: number,
@@ -58,8 +91,20 @@ function createFixedStepLoop(
   };
 }
 
-function formatVector(position: Vec3): string {
-  return `x = ${position.x.toFixed(3)} · y = ${position.y.toFixed(3)} · z = ${position.z.toFixed(3)}`;
+function sampleInput(sources: InputSources): PlayerInput {
+  const keyboard = sources.keyboard.samplePlayerInput();
+  const gamepad = sources.gamepad.samplePlayerInput();
+  const movement = Math.hypot(gamepad.movement.x, gamepad.movement.y) > 0
+    ? gamepad.movement
+    : keyboard.movement;
+  const aim = Math.hypot(gamepad.aim.x, gamepad.aim.y) > 0 ? gamepad.aim : keyboard.aim;
+  return {
+    ...keyboard,
+    movement,
+    aim,
+    shot: gamepad.shot ?? keyboard.shot,
+    focus: keyboard.focus || gamepad.focus
+  };
 }
 
 export default function App() {
@@ -67,7 +112,13 @@ export default function App() {
   const [tick, setTick] = useState(0);
   const [position, setPosition] = useState(DEFAULT_SCENARIO.position);
   const [speed, setSpeed] = useState(0);
+  const [player, setPlayer] = useState<PlayerState>(DEFAULT_PLAYER);
+  const [interception, setInterception] = useState<InterceptionEstimate>(DEFAULT_INTERCEPTION);
+  const [ghosting, setGhosting] = useState<GhostingState>(DEFAULT_GHOSTING);
+  const [bestGhostingTime, setBestGhostingTime] = useState<number | null>(null);
+  const [keyboardMapping, setKeyboardMapping] = useState<KeyboardMapping>(DEFAULT_KEYBOARD_MAPPING);
   const [lastEvent, setLastEvent] = useState<GameEvent['type'] | '—'>('—');
+  const [lastShot, setLastShot] = useState<ShotResult | null>(null);
   const [trail, setTrail] = useState<Vec3[]>([DEFAULT_SCENARIO.position]);
   const [impacts, setImpacts] = useState<ImpactMarker[]>([]);
   const [paused, setPaused] = useState(false);
@@ -78,7 +129,9 @@ export default function App() {
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const simRef = useRef<Simulation | null>(null);
+  const inputRef = useRef<InputSources | null>(null);
   const loopRef = useRef<{ stop: () => void } | null>(null);
+  const ghostingStatusRef = useRef<GhostingState['status']>('idle');
   const selectedScenario = LAB_SCENARIOS.find(({ id }) => id === selectedScenarioId) ?? DEFAULT_SCENARIO;
 
   const refresh = (simulation: Simulation) => {
@@ -86,13 +139,21 @@ export default function App() {
     setTick(snapshot.tick);
     setPosition(snapshot.position);
     setSpeed(snapshot.speed);
+    setPlayer(snapshot.player);
+    setInterception(snapshot.interception);
+    setGhosting(snapshot.ghosting);
+    setLastShot(snapshot.lastShot);
+    if (snapshot.ghosting.status === 'completed' && ghostingStatusRef.current !== 'completed') {
+      setBestGhostingTime((best) => best === null ? snapshot.ghosting.elapsedTicks : Math.min(best, snapshot.ghosting.elapsedTicks));
+    }
+    ghostingStatusRef.current = snapshot.ghosting.status;
     setTrail((points) => [...points.slice(-179), snapshot.position]);
   };
 
   const onStep = () => {
     const simulation = simRef.current;
     if (!simulation || pausedRef.current) return;
-    simulation.step();
+    simulation.step(inputRef.current ? sampleInput(inputRef.current) : undefined);
     refresh(simulation);
   };
   const onStepRef = useRef(onStep);
@@ -104,6 +165,11 @@ export default function App() {
     let disposed = false;
     let simulation: Simulation | null = null;
     let unsubscribe: (() => void) | undefined;
+    const now = () => simRef.current?.getState().time ?? 0;
+    const keyboard = new KeyboardAdapter({ simulationHz: SIMULATION_HZ, now });
+    const gamepad = new GamepadAdapter({ simulationHz: SIMULATION_HZ, now });
+    keyboard.attach(window);
+    inputRef.current = { keyboard, gamepad };
 
     void Simulation.create(toSimulationInit(DEFAULT_SCENARIO)).then((created) => {
       if (disposed) {
@@ -113,8 +179,9 @@ export default function App() {
       simulation = created;
       simRef.current = created;
       unsubscribe = created.onEvent((event) => {
-        if (event.type !== 'TICK') {
-          setLastEvent(event.type);
+        if (event.type === 'TICK') return;
+        setLastEvent(event.type);
+        if (event.type !== 'SHOT') {
           const id = impactSequenceRef.current;
           impactSequenceRef.current += 1;
           setImpacts((markers) => [...markers.slice(-79), { id, type: event.type, point: event.point }]);
@@ -139,6 +206,8 @@ export default function App() {
       simRef.current = null;
       unsubscribe?.();
       simulation?.dispose();
+      keyboard.detach(window);
+      inputRef.current = null;
     };
   }, []);
 
@@ -150,6 +219,28 @@ export default function App() {
     setTrail([selectedScenario.position]);
     setImpacts([]);
     refresh(simulation);
+  };
+
+  const startGhosting = () => {
+    const simulation = simRef.current;
+    if (!simulation) return;
+    simulation.startGhosting();
+    ghostingStatusRef.current = 'running';
+    setPaused(false);
+    refresh(simulation);
+  };
+
+  const resetGhosting = () => {
+    const simulation = simRef.current;
+    if (!simulation) return;
+    simulation.resetGhosting();
+    ghostingStatusRef.current = 'idle';
+    refresh(simulation);
+  };
+
+  const updateKeyboardMapping = (mapping: KeyboardMapping) => {
+    setKeyboardMapping(mapping);
+    inputRef.current?.keyboard.setMapping(mapping);
   };
 
   const selectScenario = (scenarioId: string) => {
@@ -177,12 +268,18 @@ export default function App() {
   return (
     <main className="lab-shell" data-testid="app">
       <header className="lab-header">
-        <div>
-          <p className="eyebrow">M1 · laboratoire de physique</p>
+        <div className="lab-brand">
+          <span className="brand-mark" aria-hidden="true">SG</span>
+          <div>
+            <p className="eyebrow">Laboratoire de squash</p>
           <h1>Squash Gaming</h1>
-          <p className="lab-subtitle">Simulation Rapier headless · pas fixe {SIMULATION_HZ} Hz · vue arrière centrée</p>
+            <p className="lab-subtitle">Physique, déplacements et frappes</p>
+          </div>
         </div>
-        <span className="live-indicator">Simulation active</span>
+        <div className="header-meta">
+          <span className="hz-badge">{SIMULATION_HZ} Hz</span>
+          <span className="live-indicator">En direct</span>
+        </div>
       </header>
 
       <div className="lab-content">
@@ -196,7 +293,17 @@ export default function App() {
           </div>
 
           <div className="court-stage">
-            <SimulationScene theme={courtTheme} cameraHeight={cameraHeight} cameraDistance={cameraDistance} position={position} trail={trail} impacts={impacts} />
+            <SimulationScene
+              theme={courtTheme}
+              cameraHeight={cameraHeight}
+              cameraDistance={cameraDistance}
+              position={position}
+              trail={trail}
+              impacts={impacts}
+              player={player}
+              interception={interception}
+              ghosting={ghosting}
+            />
             <div className="stats-overlay" aria-label="Statistiques principales">
               <div className="stat-pill">
                 <span>Vitesse</span>
@@ -213,8 +320,8 @@ export default function App() {
             </div>
           </div>
           <div className="court-caption">
-            <span>Orange : balle · ligne : trajectoire · points : impacts</span>
-            <span>Tick {tick}</span>
+            <span><i className="legend-dot ball-dot" />Balle <i className="legend-line" />Trajectoire <i className="legend-dot impact-dot" />Impacts</span>
+            <span className="tick-label">Tick {tick}</span>
           </div>
         </section>
 
@@ -349,30 +456,23 @@ export default function App() {
                 Réinitialiser le scénario
               </button>
             </div>
+
+            <GhostingPanel
+              ghosting={ghosting}
+              bestTime={bestGhostingTime}
+              onStart={startGhosting}
+              onReset={resetGhosting}
+            />
+            <KeyboardBindingsPanel
+              mapping={keyboardMapping}
+              onChange={updateKeyboardMapping}
+              onReset={() => updateKeyboardMapping(DEFAULT_KEYBOARD_MAPPING)}
+            />
           </section>
 
-          <section className="stats-card" aria-label="État détaillé de la balle">
-            <p className="card-kicker">Mesures</p>
-            <h2>État de la balle</h2>
-            <div className="stats-grid">
-              <div className="stat-row speed-row">
-                <span>Vitesse instantanée</span>
-                <strong data-testid="speed">{speed.toFixed(3)} m/s</strong>
-              </div>
-              <div className="stat-row">
-                <span>Tick</span>
-                <strong data-testid="tick">{tick}</strong>
-              </div>
-              <div className="stat-row">
-                <span>Dernier impact</span>
-                <strong data-testid="last-event">{lastEvent}</strong>
-              </div>
-              <div className="stat-row" data-testid="position">
-                <span>Position</span>
-                <strong>{formatVector(position)}</strong>
-              </div>
-            </div>
-          </section>
+          <BallStatsCard position={position} speed={speed} tick={tick} lastEvent={lastEvent} lastShot={lastShot} />
+
+          <PlayerStatsCard player={player} interception={interception} />
         </aside>
       </div>
     </main>

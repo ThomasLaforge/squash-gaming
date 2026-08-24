@@ -84,7 +84,7 @@ export class GamepadAdapter {
   /** Échantillon `PlayerInput` complet (mouvement, visée, effort, focus). */
   public samplePlayerInput(): SimPlayerInput {
     const frame = this.poll();
-    return toPlayerInput(frame);
+    return { ...toPlayerInput(frame), shot: this.state.takeShotIntent() };
   }
 
   public reset(): void {

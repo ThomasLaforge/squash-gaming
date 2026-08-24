@@ -72,6 +72,56 @@ test.describe('Laboratoire physique M1', () => {
     await expect(page.getByTestId('camera-distance-value')).toHaveText('5.3 m');
   });
 
+  test('le joueur répond au clavier et reste dans le court', async ({ page }) => {
+    await page.goto('/');
+    await expect.poll(async () => (await readTick(page)) > 0).toBe(true);
+
+    const initial = await page.getByTestId('player-position').textContent();
+    await page.keyboard.down('z');
+    await page.waitForTimeout(400);
+    const stanceWhileMoving = await page.getByTestId('player-stance').textContent();
+    await page.keyboard.up('z');
+
+    const moved = await page.getByTestId('player-position').textContent();
+    expect(moved).not.toBe(initial);
+    expect(stanceWhileMoving).not.toBe('À l’appui');
+  });
+
+  test('le parcours de ghosting démarre et se réinitialise', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('ghosting-panel')).toBeVisible();
+    await page.getByTestId('ghosting-start').click();
+
+    await expect(page.getByTestId('ghosting-progress')).toHaveText('0/6');
+    await expect(page.getByTestId('ghosting-target')).toContainText('Coin avant gauche');
+    await expect(page.getByTestId('ghosting-start')).toHaveText('Recommencer');
+
+    await page.getByTestId('ghosting-reset').click();
+    await expect(page.getByTestId('ghosting-start')).toHaveText('Démarrer');
+  });
+
+  test('les touches de déplacement peuvent être remappées', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('keyboard-bindings').locator('summary').click();
+    await page.getByTestId('binding-movement-up').click();
+    await page.keyboard.press('x');
+
+    await expect(page.getByTestId('binding-movement-up')).toHaveText('X');
+    await page.getByTestId('bindings-reset').click();
+    await expect(page.getByTestId('binding-movement-up')).toHaveText('Z');
+  });
+
+  test('une balle prête accepte une intention de coup', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('scenario-select').selectOption('shot-ready');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+    await page.keyboard.press('Space');
+
+    await expect.poll(async () => (await page.getByTestId('last-shot').textContent()) ?? '').toContain('length');
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  });
+
   test('Reset restaure exactement la position initiale', async ({ page }) => {
     await page.goto('/');
     await expect.poll(async () => (await readTick(page)) > 0).toBe(true);

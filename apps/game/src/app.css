@@ -4,6 +4,15 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --canvas: #0b1118;
+  --surface: rgba(17, 27, 36, 0.88);
+  --surface-raised: #15232d;
+  --surface-inset: #0c151c;
+  --border: #263b48;
+  --muted: #91a0aa;
+  --soft: #cbd8dc;
+  --accent: #e8893c;
+  --accent-soft: #ffbd74;
 }
 
 * {
@@ -13,7 +22,7 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #0b1118;
+  background: var(--canvas);
 }
 
 button,
@@ -33,10 +42,10 @@ button {
 
 .lab-shell {
   min-height: 100vh;
-  padding: 28px clamp(18px, 4vw, 64px) 48px;
+  padding: 24px clamp(18px, 4vw, 64px) 48px;
   background:
-    radial-gradient(circle at 78% 0%, rgba(56, 102, 126, 0.22), transparent 32rem),
-    #0b1118;
+    radial-gradient(circle at 78% 0%, rgba(56, 102, 126, 0.24), transparent 34rem),
+    linear-gradient(180deg, #0e1821 0%, var(--canvas) 40rem);
 }
 
 .lab-header,
@@ -47,10 +56,41 @@ button {
 
 .lab-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(83, 113, 127, 0.26);
+}
+
+.lab-brand,
+.header-meta {
+  display: flex;
+  align-items: center;
+}
+
+.lab-brand {
+  gap: 13px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 189, 116, 0.45);
+  border-radius: 12px;
+  color: var(--accent-soft);
+  background: linear-gradient(145deg, #4a2b1d, #17242e);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.header-meta {
+  gap: 9px;
 }
 
 .eyebrow,
@@ -70,9 +110,20 @@ button {
 }
 
 .lab-subtitle {
-  margin: 8px 0 0;
-  color: #91a0aa;
-  font-size: 0.95rem;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.hz-badge {
+  padding: 8px 11px;
+  border: 1px solid #304353;
+  border-radius: 999px;
+  color: #b7c8cf;
+  background: rgba(17, 31, 41, 0.7);
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .live-indicator {
@@ -80,7 +131,7 @@ button {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid #2d4f5a;
+  border: 1px solid #2d5552;
   border-radius: 999px;
   color: #a5d9c1;
   background: #10231f;
@@ -98,23 +149,122 @@ button {
 
 .lab-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(330px, 370px);
+  gap: 22px;
   align-items: start;
 }
 
 .court-card,
 .control-card,
 .stats-card {
-  border: 1px solid #243441;
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: rgba(17, 27, 36, 0.86);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  background: var(--surface);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.ghosting-card {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #2a3c47;
+}
+
+.ghosting-card h2 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+}
+
+.ghosting-stats {
+  display: grid;
+  gap: 8px;
+}
+
+.ghosting-stats > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #91a0aa;
+  font-size: 0.78rem;
+}
+
+.ghosting-stats strong {
+  color: #eef7f7;
+  text-align: right;
+}
+
+.ghosting-record {
+  margin: 12px 0 0;
+  color: #f7d27c;
+  font-size: 0.78rem;
+}
+
+.bindings-card {
+  margin-top: 14px;
+  padding: 12px 0 0;
+  border-top: 1px solid #2a3c47;
+}
+
+.bindings-card summary {
+  cursor: pointer;
+  color: #dfe9ed;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.bindings-help {
+  margin: 10px 0 14px;
+  color: #91a0aa;
+  font-size: 0.76rem;
+}
+
+.bindings-group {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.binding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #cbd8dc;
+  font-size: 0.8rem;
+}
+
+.binding-key {
+  min-width: 84px;
+  padding: 5px 8px;
+  color: #eff7f7;
+  background: #17242e;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.binding-key.is-capturing {
+  border-color: #f7d27c;
+  color: #f7d27c;
+}
+
+.bindings-error {
+  margin: 12px 0 0;
+  color: #f08a8f;
+  font-size: 0.75rem;
+}
+
+.bindings-reset {
+  width: 100%;
+  margin-top: 14px;
+  padding: 7px 9px;
+  color: #b8c8cd;
+  background: transparent;
+  font-size: 0.75rem;
 }
 
 .court-card {
   min-width: 0;
-  padding: 18px;
+  padding: 20px;
 }
 
 .court-card-header,
@@ -133,7 +283,7 @@ button {
 }
 
 .court-card-header {
-  margin: 0 2px 14px;
+  margin: 0 2px 16px;
 }
 
 .court-stage {
@@ -141,7 +291,10 @@ button {
 }
 
 .court-stage [data-testid="physics-scene"] {
-  min-height: 420px;
+  min-height: 480px;
+  border: 1px solid rgba(171, 204, 215, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.22);
 }
 
 .stats-overlay {
@@ -149,17 +302,17 @@ button {
   top: 14px;
   left: 14px;
   display: flex;
-  gap: 8px;
+  gap: 7px;
   pointer-events: none;
 }
 
 .stat-pill {
-  min-width: 104px;
-  padding: 9px 11px;
-  border: 1px solid rgba(216, 236, 240, 0.2);
-  border-radius: 10px;
+  min-width: 108px;
+  padding: 10px 12px;
+  border: 1px solid rgba(216, 236, 240, 0.22);
+  border-radius: 11px;
   color: #eef7f7;
-  background: rgba(8, 16, 22, 0.72);
+  background: rgba(8, 16, 22, 0.78);
   backdrop-filter: blur(10px);
 }
 
@@ -190,6 +343,44 @@ button {
   font-size: 0.78rem;
 }
 
+.court-caption > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot,
+.legend-line {
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.ball-dot {
+  background: #ff9b4a;
+  box-shadow: 0 0 8px rgba(255, 155, 74, 0.65);
+}
+
+.impact-dot {
+  background: #f5e8bf;
+}
+
+.legend-line {
+  width: 17px;
+  height: 2px;
+  margin-left: 4px;
+  background: #f5e8bf;
+}
+
+.tick-label {
+  font-variant-numeric: tabular-nums;
+}
+
 .lab-sidebar {
   display: grid;
   gap: 14px;
@@ -197,11 +388,13 @@ button {
 
 .control-card,
 .stats-card {
-  padding: 18px;
+  padding: 20px;
 }
 
 .control-card-header {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(83, 113, 127, 0.25);
 }
 
 .control-label {
@@ -217,6 +410,15 @@ button {
   padding: 10px 11px;
   color: #edf4f5;
   background: #17242e;
+  outline: none;
+}
+
+.control-label select:focus,
+button:focus-visible,
+input[type="range"]:focus-visible,
+summary:focus-visible {
+  outline: 2px solid rgba(232, 137, 60, 0.78);
+  outline-offset: 2px;
 }
 
 .scenario-description {
@@ -241,7 +443,7 @@ button {
   gap: 6px;
   padding: 4px;
   border-radius: 10px;
-  background: #0c151c;
+  background: var(--surface-inset);
 }
 
 .segmented-control button,
@@ -253,8 +455,8 @@ button {
 
 .segmented-control button[aria-pressed="true"] {
   color: #fff;
-  border-color: #e8893c;
-  background: #b9612c;
+  border-color: var(--accent);
+  background: linear-gradient(135deg, #bd6933, #8e4726);
 }
 
 .action-row {
@@ -303,12 +505,20 @@ button {
 
 .action-row button {
   border-color: #304353;
-  background: #17242e;
+  background: var(--surface-raised);
 }
 
 .action-row button:hover,
-.segmented-control button:hover {
+.segmented-control button:hover,
+.binding-key:hover,
+.bindings-reset:hover {
   border-color: #5e8192;
+}
+
+.action-row button:active,
+.segmented-control button:active,
+.binding-key:active {
+  transform: translateY(1px);
 }
 
 .action-row button:last-child {
@@ -317,6 +527,10 @@ button {
 
 .stats-card h2 {
   margin-bottom: 14px;
+}
+
+.stats-card + .stats-card {
+  margin-top: 0;
 }
 
 .stats-grid {
@@ -350,8 +564,8 @@ button {
 
 .speed-row {
   grid-column: span 2;
-  border: 1px solid #7b542e;
-  background: linear-gradient(135deg, #3a281b, #1b252b);
+  border: 1px solid rgba(232, 137, 60, 0.5);
+  background: linear-gradient(135deg, #3a281b, #1b252b 75%);
 }
 
 .speed-row strong {
@@ -367,6 +581,10 @@ button {
   .lab-sidebar {
     grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
   }
+
+  .court-stage [data-testid="physics-scene"] {
+    min-height: 420px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -377,6 +595,14 @@ button {
   .lab-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .header-meta {
+    width: 100%;
+  }
+
+  .header-meta .live-indicator {
+    margin-left: auto;
   }
 
   .court-card {
